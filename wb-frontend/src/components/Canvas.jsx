@@ -39,10 +39,14 @@ const Canvas = () => {
   useEffect(() => {
     if (!ctx) return;
     
-    // Clear and redraw all strokes
+    console.log('Rendering canvas:', { 
+      strokesCount: strokes.length,
+      currentStrokeLength: currentStroke.length,
+      isDrawing
+    });
+    
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     
-    // Draw all completed strokes
     strokes.forEach(stroke => {
       if (stroke.length < 2) return;
       
@@ -56,8 +60,7 @@ const Canvas = () => {
       ctx.stroke();
     });
     
-    // Draw current stroke
-    if (currentStroke.length > 1) {
+    if (currentStroke.length > 0) {
       ctx.beginPath();
       ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
       
@@ -80,23 +83,21 @@ const Canvas = () => {
   }, [ctx, strokes, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking]);
 
   const startDrawing = (e) => {
-    if (useHandTracking) return; // Skip if using hand tracking
+    if (useHandTracking) return;
     setIsDrawing(true);
     const point = getPointerPosition(e);
     setCurrentStroke([point]);
   };
-
+  
   const draw = (e) => {
     if (!isDrawing || useHandTracking) return;
-    
     const point = getPointerPosition(e);
     setCurrentStroke(prev => [...prev, point]);
   };
 
   const endDrawing = () => {
     if (!isDrawing || useHandTracking) return;
-    
-    if (currentStroke.length > 1) {
+    if (currentStroke.length > 0) {
       setStrokes(prev => [...prev, currentStroke]);
     }
     setCurrentStroke([]);
@@ -128,28 +129,34 @@ const Canvas = () => {
     setCursorPosition({ x, y });
     setShowCursor(true);
     
-    // Detect change in pinch state (to avoid repeated state changes)
+    // Detect change in pinch state
     const isPinching = handData.isPinching;
     const wasPinching = prevPinchState.current;
-    prevPinchState.current = isPinching;
+    
+    console.log('Hand state:', { isPinching, wasPinching, x, y }); // Debug log
     
     // Start drawing on pinch
     if (isPinching && !wasPinching) {
+      console.log('Starting stroke'); // Debug log
       setIsDrawing(true);
       setCurrentStroke([{ x, y }]);
     } 
     // Continue drawing while pinching
-    else if (isPinching && isDrawing) {
+    else if (isPinching && wasPinching) {
+      console.log('Adding to stroke'); // Debug log
       setCurrentStroke(prev => [...prev, { x, y }]);
     } 
     // End drawing when unpinching
     else if (!isPinching && wasPinching) {
-      if (currentStroke.length > 1) {
+      console.log('Ending stroke');
+      if (currentStroke.length > 0) {
         setStrokes(prev => [...prev, currentStroke]);
+        setCurrentStroke([]);
       }
-      setCurrentStroke([]);
       setIsDrawing(false);
     }
+    
+    prevPinchState.current = isPinching;
   };
   
   // Toggle between mouse/touch and hand tracking modes
@@ -198,8 +205,7 @@ const Canvas = () => {
       
       {useHandTracking && <HandTracking onHandUpdate={handleHandUpdate} />}
       
-     
-      
+
       {useHandTracking && !isHandReady && (
         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white p-4 rounded-md z-50">
           <p className="text-center">Please allow camera access and wait for the hand tracking model to load...</p>

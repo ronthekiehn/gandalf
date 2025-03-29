@@ -5,6 +5,8 @@ const Canvas = () => {
   const canvasRef = useRef(null);
   const bgCanvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [strokeColor, setStrokeColor] = useState('black');
+  const [linewidth, setLinewidth] = useState(3);
   const [ctx, setCtx] = useState(null);
   const [currentStroke, setCurrentStroke] = useState([]);
   const [strokes, setStrokes] = useState([]);
@@ -15,19 +17,18 @@ const Canvas = () => {
   const prevPinchState = useRef(false);
   const currentStrokeRef = useRef([]);
   const cursorHistoryRef = useRef([]);
-  const cursorHistorySize = 3; 
-  
+  const cursorHistorySize = 3;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
-
     // Set canvas size to its parent container size
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight - 70; // Adjust for header/footer
       context.lineJoin = 'round';
       context.lineCap = 'round';
-      context.lineWidth = 3;
+      context.lineWidth = linewidth;
       context.strokeStyle = 'black';
     };
 
@@ -60,7 +61,7 @@ const Canvas = () => {
       [context, bgCtx].forEach(ctx => {
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = linewidth;
         ctx.strokeStyle = 'black';
       });
     };
@@ -86,7 +87,7 @@ const Canvas = () => {
 
     // Draw the background canvas (contains all completed strokes)
     ctx.drawImage(bgCanvasRef.current, 0, 0);
-
+    ctx.strokeStyle = strokeColor;
     // Only draw the current stroke on the main canvas
     if (currentStroke.length > 0) {
       ctx.beginPath();
@@ -112,7 +113,8 @@ const Canvas = () => {
 
   const addStrokeToBackground = (stroke) => {
     const bgCtx = bgCanvasRef.current.getContext('2d');
-
+    bgCtx.strokeStyle = strokeColor;
+    bgCtx.lineWidth = linewidth;
     bgCtx.beginPath();
     bgCtx.moveTo(stroke[0].x, stroke[0].y);
 
@@ -314,21 +316,69 @@ const Canvas = () => {
 
   return (
     <>
-     <div className="absolute top-0 right-4 flex flex-col gap-2">
-        <button
-          className="bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700"
-          onClick={toggleHandTracking}
-        >
-          {useHandTracking ? '✋ Hand Mode ON' : '🖱️ Mouse Mode'}
-        </button>
+    <div className="absolute top-0 right-4 flex flex-col gap-2">
+      <button
+        className="bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700"
+        onClick={toggleHandTracking}
+      >
+        {useHandTracking ? '✋ Hand Mode ON' : '🖱️ Mouse Mode'}
+      </button>
 
+      <button
+        className="bg-red-600 text-white p-2 rounded-full shadow-lg hover:bg-red-700"
+        onClick={clearCanvas}
+      >
+        Clear
+      </button>
+      <div className="slider-container">
+        <label htmlFor="linewidth" className="text-sm text-gray-700">Line Width: </label>
+        <input
+        type="range"
+        id="linewidth"
+        name="linewidth"
+        min="1"
+        max="10"
+        value={linewidth}
+        onChange={(e) => {
+        const newWidth = Math.max(1, Math.min(10, parseInt(e.target.value)));
+        setLinewidth(newWidth);
+        setCtx((prevCtx) => {
+        if (prevCtx) {
+        prevCtx.lineWidth = newWidth;
+        }
+        return prevCtx;
+        });
+        }}
+        className="w-full"
+        style={{
+        background: `linear-gradient(to right, #000000 0%, #000000 ${linewidth / 10 * 100}%, #ccc ${linewidth / 10 * 100}%, #ccc 100%)`
+        }}
+        />
+        </div>
+      {/* Color Buttons */}
+      <div className="flex flex-col gap-2">
         <button
-          className="bg-red-600 text-white p-2 rounded-full shadow-lg hover:bg-red-700"
-          onClick={clearCanvas}
-        >
-          Clear
-        </button>
+          className="w-10 h-10 rounded-full bg-black shadow-lg hover:opacity-80"
+          onClick={() => setStrokeColor('black')}
+          aria-label="Black"
+        ></button>
+        <button
+          className="w-10 h-10 rounded-full bg-red-600 shadow-lg hover:opacity-80"
+          onClick={() => setStrokeColor('red')}
+          aria-label="Red"
+        ></button>
+        <button
+          className="w-10 h-10 rounded-full bg-blue-600 shadow-lg hover:opacity-80"
+          onClick={() => setStrokeColor('blue')}
+          aria-label="Blue"
+        />
+        <button
+          className="w-10 h-10 rounded-full bg-green-600 shadow-lg hover:opacity-80"
+          onClick={() => setStrokeColor('green')}
+          aria-label="Green"
+        />
       </div>
+    </div>
       <canvas
         ref={canvasRef}
         className="w-full h-full bg-white"

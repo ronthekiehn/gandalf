@@ -12,6 +12,7 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.0",
     "@tailwindcss/postcss": "^4.0.17",
+    "@tailwindcss/vite": "^4.0.17",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwindcss": "^4.0.17"

@@ -12,6 +12,7 @@ const Canvas = () => {
   const [showCursor, setShowCursor] = useState(false);
   const [isHandReady, setIsHandReady] = useState(false);
   const prevPinchState = useRef(false);
+  const currentStrokeRef = useRef([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,6 +37,10 @@ const Canvas = () => {
     };
   }, []);
 
+  useEffect(() => {
+    currentStrokeRef.current = currentStroke;
+  }, [currentStroke]);
+  
   useEffect(() => {
     if (!ctx) return;
     
@@ -114,6 +119,7 @@ const Canvas = () => {
   
   // Handle hand tracking updates
   const handleHandUpdate = (handData) => {
+    console.log('Current stroke:', currentStroke)
     if (!handData || !canvasRef.current) return;
     setIsHandReady(true);
     
@@ -148,11 +154,11 @@ const Canvas = () => {
     } 
     // End drawing when unpinching
     else if (!isPinching && wasPinching) {
-      console.log('Ending stroke');
-      if (currentStroke.length > 0) {
-        setStrokes(prev => [...prev, currentStroke]);
-        setCurrentStroke([]);
+      console.log('Ending stroke with:', currentStrokeRef.current);
+      if (currentStrokeRef.current.length > 0) {
+        setStrokes(prev => [...prev, [...currentStrokeRef.current]]);
       }
+      setCurrentStroke([]);
       setIsDrawing(false);
     }
     

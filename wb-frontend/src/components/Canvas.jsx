@@ -10,16 +10,16 @@ const Canvas = () => {
     const provider = new WebsocketProvider('ws://localhost:1234', 'my-room', ydoc);
     return provider;
   });
-  
+
   const ydoc = provider.doc;
-  const yStrokes = ydoc.getArray('strokes'); 
+  const yStrokes = ydoc.getArray('strokes');
   const awareness = provider.awareness;
-  
+
   const canvasRef = useRef(null);
   const bgCanvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [strokeColor, setStrokeColor] = useState('black');
-  const [linewidth, setLinewidth] = useState(3);
+  const strokeColorRef = useRef('black');
+  const linewidthRef = useRef(3);
   const [ctx, setCtx] = useState(null);
   const [currentStroke, setCurrentStroke] = useState([]);
   const [strokes, setStrokes] = useState([]);
@@ -59,15 +59,15 @@ const Canvas = () => {
 
     // Initial sync
     setStrokes(yStrokes.toArray());
-    
+
     // Listen for changes
     yStrokes.observe(handleStrokesUpdate);
-    
+
     return () => {
       yStrokes.unobserve(handleStrokesUpdate);
     };
   }, [yStrokes]);
-  
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
@@ -88,8 +88,8 @@ const Canvas = () => {
       [context, bgCtx].forEach(ctx => {
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.lineWidth = linewidth;
-        ctx.strokeStyle = 'black';
+        ctx.lineWidth = linewidthRef.current;
+        ctx.strokeStyle = strokeColorRef.current;
       });
     };
 
@@ -114,7 +114,7 @@ const Canvas = () => {
 
     // Draw the background canvas (contains all completed strokes)
     ctx.drawImage(bgCanvasRef.current, 0, 0);
-    ctx.strokeStyle = strokeColor;
+    ctx.strokeStyle = strokeColorRef.current;
     // Only draw the current stroke on the main canvas
     if (currentStroke.length > 0) {
       ctx.beginPath();
@@ -130,31 +130,31 @@ const Canvas = () => {
     // Draw cursor if hand tracking is active
     if (showCursor && useHandTracking) {
       ctx.save();
-      ctx.fillStyle = isDrawing ? 'red' : 'blue';
+      ctx.fillStyle = isDrawing ? strokeColorRef.current : 'gray';
       ctx.beginPath();
       ctx.arc(cursorPosition.x, cursorPosition.y, 10, 0, 2 * Math.PI);
       ctx.fill();
       ctx.restore();
     }
-    
+
     // Draw all users' cursors
     awareness.getStates().forEach((state, clientID) => {
       if (state.cursor && clientID !== ydoc.clientID) {
         ctx.save();
-        ctx.fillStyle = state.isDrawing ? 'red' : 'blue';
+        ctx.fillStyle = state.isDrawing ? strokeColorRef.current : 'gray';
         ctx.beginPath();
         ctx.arc(state.cursor.x, state.cursor.y, 10, 0, 2 * Math.PI);
         ctx.fill();
         ctx.restore();
       }
     });
-    
+
   }, [ctx, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking, awareness]);
 
   const addStrokeToBackground = (stroke) => {
     const bgCtx = bgCanvasRef.current.getContext('2d');
-    bgCtx.strokeStyle = strokeColor;
-    bgCtx.lineWidth = linewidth;
+    bgCtx.strokeStyle = strokeColorRef.current;
+    bgCtx.lineWidth = linewidthRef.current;
     bgCtx.beginPath();
     bgCtx.moveTo(stroke[0].x, stroke[0].y);
 
@@ -216,11 +216,11 @@ const Canvas = () => {
       const smoothedStroke = smoothStroke(currentStroke);
       addStrokeToBackground(smoothedStroke);
       setStrokes(prev => [...prev, smoothedStroke]);
-      const newStroke = { 
-        id: crypto.randomUUID(), 
-        points: smoothedStroke, 
-        color: strokeColor, 
-        width: linewidth 
+      const newStroke = {
+        id: crypto.randomUUID(),
+        points: smoothedStroke,
+        color: strokeColorRef.current,
+        width: linewidthRef.current
       };
       yStrokes.push([newStroke]);
     }
@@ -322,11 +322,11 @@ const Canvas = () => {
         const smoothedStroke = smoothStroke(currentStrokeRef.current);
         addStrokeToBackground(smoothedStroke); // Add this line
         setStrokes(prev => [...prev, smoothedStroke]);
-        const newStroke = { 
-          id: crypto.randomUUID(), 
-          points: smoothedStroke, 
-          color: strokeColor, 
-          width: linewidth
+        const newStroke = {
+          id: crypto.randomUUID(),
+          points: smoothedStroke,
+          color: strokeColorRef.current,
+          width: linewidthRef.current
         };
         yStrokes.push([smoothedStroke]); // Sync to Yjs
 
@@ -393,10 +393,10 @@ const Canvas = () => {
           name="linewidth"
           min="2"
           max="10"
-          value={linewidth}
+          value={linewidthRef.current}
           onChange={(e) => {
           const newWidth = Math.max(2, Math.min(10, parseInt(e.target.value)));
-            setLinewidth(newWidth);
+          linewidthRef.current = newWidth;
             setCtx((prevCtx) => {
               if (prevCtx) {
                   prevCtx.lineWidth = newWidth;
@@ -406,7 +406,7 @@ const Canvas = () => {
             }}
           className="w-full"
           style={{
-            background: `linear-gradient(to right, #000000 0%, #000000 ${linewidth / 10 * 100}%, #ccc ${linewidth / 10 * 100}%, #ccc 100%)`
+            background: `linear-gradient(to right, #000000 0%, #000000 ${linewidthRef.current / 10 * 100}%, #ccc ${linewidthRef.current / 10 * 100}%, #ccc 100%)`
           }}
           />
         </div>
@@ -414,22 +414,22 @@ const Canvas = () => {
       <div className="flex gap-2">
         <button
           className="w-10 h-10 rounded-full bg-black shadow-lg hover:opacity-80"
-          onClick={() => setStrokeColor('black')}
+          onClick={() => (strokeColorRef.current = 'black')}
           aria-label="Black"
         ></button>
         <button
           className="w-10 h-10 rounded-full bg-red-600 shadow-lg hover:opacity-80"
-          onClick={() => setStrokeColor('red')}
+          onClick={() => (strokeColorRef.current = 'red')}
           aria-label="Red"
         ></button>
         <button
           className="w-10 h-10 rounded-full bg-blue-600 shadow-lg hover:opacity-80"
-          onClick={() => setStrokeColor('blue')}
+          onClick={() => (strokeColorRef.current = 'blue')}
           aria-label="Blue"
         />
         <button
           className="w-10 h-10 rounded-full bg-green-600 shadow-lg hover:opacity-80"
-          onClick={() => setStrokeColor('green')}
+          onClick={() => (strokeColorRef.current = 'green')}
           aria-label="Green"
         />
       </div>

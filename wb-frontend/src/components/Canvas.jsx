@@ -169,21 +169,7 @@ const Canvas = () => {
 
   return (
     <>
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full bg-white"
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={endDrawing}
-        onMouseLeave={endDrawing}
-        onTouchStart={startDrawing}
-        onTouchMove={draw}
-        onTouchEnd={endDrawing}
-      />
-      
-      {useHandTracking && <HandTracking onHandUpdate={handleHandUpdate} />}
-      
-      <div className="absolute bottom-12 right-4 flex flex-col gap-2">
+     <div className="absolute top-0 right-4 flex flex-col gap-2">
         <button 
           className="bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700"
           onClick={toggleHandTracking}
@@ -198,6 +184,21 @@ const Canvas = () => {
           Clear
         </button>
       </div>
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full bg-white"
+        onMouseDown={startDrawing}
+        onMouseMove={draw}
+        onMouseUp={endDrawing}
+        onMouseLeave={endDrawing}
+        onTouchStart={startDrawing}
+        onTouchMove={draw}
+        onTouchEnd={endDrawing}
+      />
+      
+      {useHandTracking && <HandTracking onHandUpdate={handleHandUpdate} />}
+      
+     
       
       {useHandTracking && !isHandReady && (
         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white p-4 rounded-md z-50">

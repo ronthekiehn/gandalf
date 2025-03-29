@@ -14,9 +14,6 @@ function App() {
         </div>
       </main>
       
-      <footer className="bg-gray-200 p-1 text-center text-gray-600 text-xs">
-        <p>Whiteboard App with Hand Tracking (Phase 1)</p>
-      </footer>
     </div>
   );
 }

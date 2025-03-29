@@ -1,7 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import HandTracking from './HandTracking';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
 
 const Canvas = () => {
+  // Create Yjs document and provider
+  const [provider] = useState(() => {
+    const ydoc = new Y.Doc();
+    const provider = new WebsocketProvider('ws://10.150.7.104:1234', 'my-room', ydoc);
+    return provider;
+  });
+
+  const ydoc = provider.doc;
+  const yStrokes = ydoc.getArray('strokes');
+  const awareness = provider.awareness;
+
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [ctx, setCtx] = useState(null);
@@ -12,6 +25,43 @@ const Canvas = () => {
   const [showCursor, setShowCursor] = useState(false);
   const [isHandReady, setIsHandReady] = useState(false);
   const prevPinchState = useRef(false);
+
+  // Set up Yjs awareness
+  useEffect(() => {
+    const updateLocalAwareness = () => {
+      if (useHandTracking && isHandReady) {
+        awareness.setLocalState({
+          cursor: cursorPosition,
+          isDrawing,
+          user: crypto.randomUUID() // In real app, use actual user ID
+        });
+      } else {
+        awareness.setLocalState(null);
+      }
+    };
+
+    updateLocalAwareness();
+    return () => {
+      awareness.setLocalState(null);
+    };
+  }, [awareness, cursorPosition, isHandReady, useHandTracking, isDrawing]);
+
+  // Sync with Yjs strokes
+  useEffect(() => {
+    const handleStrokesUpdate = () => {
+      setStrokes(yStrokes.toArray());
+    };
+
+    // Initial sync
+    setStrokes(yStrokes.toArray());
+    
+    // Listen for changes
+    yStrokes.observe(handleStrokesUpdate);
+    
+    return () => {
+      yStrokes.unobserve(handleStrokesUpdate);
+    };
+  }, [yStrokes]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,33 +86,35 @@ const Canvas = () => {
     };
   }, []);
 
+  // Modify the drawing effect to include other users' cursors
   useEffect(() => {
     if (!ctx) return;
     
-    console.log('Rendering canvas:', { 
-      strokesCount: strokes.length,
-      currentStrokeLength: currentStroke.length,
-      isDrawing
-    });
-    
+    // Clear canvas
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     
+    // Draw all completed strokes
     strokes.forEach(stroke => {
-      if (stroke.length < 2) return;
+      if (stroke.points.length < 2) return;
       
       ctx.beginPath();
-      ctx.moveTo(stroke[0].x, stroke[0].y);
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
       
-      for (let i = 1; i < stroke.length; i++) {
-        ctx.lineTo(stroke[i].x, stroke[i].y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
       }
       
       ctx.stroke();
     });
     
-    if (currentStroke.length > 0) {
+    // Draw current stroke
+    if (currentStroke.length > 1) {
       ctx.beginPath();
       ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 3;
       
       for (let i = 1; i < currentStroke.length; i++) {
         ctx.lineTo(currentStroke[i].x, currentStroke[i].y);
@@ -71,7 +123,19 @@ const Canvas = () => {
       ctx.stroke();
     }
     
-    // Draw cursor if hand tracking is active
+    // Draw all users' cursors
+    awareness.getStates().forEach((state, clientID) => {
+      if (state.cursor && clientID !== ydoc.clientID) {
+        ctx.save();
+        ctx.fillStyle = state.isDrawing ? 'red' : 'blue';
+        ctx.beginPath();
+        ctx.arc(state.cursor.x, state.cursor.y, 10, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+    
+    // Draw local cursor if hand tracking is active
     if (showCursor && useHandTracking) {
       ctx.save();
       ctx.fillStyle = isDrawing ? 'red' : 'blue';
@@ -80,7 +144,7 @@ const Canvas = () => {
       ctx.fill();
       ctx.restore();
     }
-  }, [ctx, strokes, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking]);
+  }, [ctx, strokes, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking, awareness]);
 
   const startDrawing = (e) => {
     if (useHandTracking) return;
@@ -95,10 +159,18 @@ const Canvas = () => {
     setCurrentStroke(prev => [...prev, point]);
   };
 
+  // Modify endDrawing to sync with Yjs
   const endDrawing = () => {
     if (!isDrawing || useHandTracking) return;
-    if (currentStroke.length > 0) {
-      setStrokes(prev => [...prev, currentStroke]);
+    
+    if (currentStroke.length > 1) {
+      const newStroke = { 
+        id: crypto.randomUUID(), 
+        points: currentStroke, 
+        color: 'black', 
+        width: 3 
+      };
+      yStrokes.push([newStroke]); // Sync to Yjs
     }
     setCurrentStroke([]);
     setIsDrawing(false);
@@ -112,7 +184,7 @@ const Canvas = () => {
     return { x, y };
   };
   
-  // Handle hand tracking updates
+  // Modify handleHandUpdate to sync with Yjs
   const handleHandUpdate = (handData) => {
     if (!handData || !canvasRef.current) return;
     setIsHandReady(true);
@@ -149,10 +221,16 @@ const Canvas = () => {
     // End drawing when unpinching
     else if (!isPinching && wasPinching) {
       console.log('Ending stroke');
-      if (currentStroke.length > 0) {
-        setStrokes(prev => [...prev, currentStroke]);
-        setCurrentStroke([]);
+      if (currentStroke.length > 1) {
+        const newStroke = { 
+          id: crypto.randomUUID(), 
+          points: currentStroke, 
+          color: 'black', 
+          width: 3 
+        };
+        yStrokes.push([newStroke]); // Sync to Yjs
       }
+      setCurrentStroke([]);
       setIsDrawing(false);
     }
     

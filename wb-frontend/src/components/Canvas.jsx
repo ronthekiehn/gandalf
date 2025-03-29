@@ -87,6 +87,38 @@ const Canvas = () => {
     }
   }, [ctx, strokes, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking]);
 
+  // Chaikin Smoothing Algorithm
+  const smoothStroke = (points, iterations = 12) => {
+    if (points.length < 2) return points;
+    
+    let smoothed = points;
+    
+    for (let iter = 0; iter < iterations; iter++) {
+      const newPoints = [];
+      newPoints.push(smoothed[0]);
+      for (let i = 0; i < smoothed.length - 1; i++) {
+        const p0 = smoothed[i];
+        const p1 = smoothed[i + 1];
+
+        newPoints.push({
+          x: p0.x * 0.5 + p1.x * 0.5,
+          y: p0.y * 0.5 + p1.y * 0.5
+        });
+        
+        newPoints.push({
+          x: p0.x * 0.5 + p1.x * 0.5,
+          y: p0.y * 0.5 + p1.y * 0.5
+        });
+      }
+
+      newPoints.push(smoothed[smoothed.length - 1]);
+      
+      smoothed = newPoints;
+    }
+    
+    return smoothed;
+  };
+  
   const startDrawing = (e) => {
     if (useHandTracking) return;
     setIsDrawing(true);
@@ -103,7 +135,9 @@ const Canvas = () => {
   const endDrawing = () => {
     if (!isDrawing || useHandTracking) return;
     if (currentStroke.length > 0) {
-      setStrokes(prev => [...prev, currentStroke]);
+      // Apply smoothing before adding to strokes array
+      const smoothedStroke = smoothStroke(currentStroke);
+      setStrokes(prev => [...prev, smoothedStroke]);
     }
     setCurrentStroke([]);
     setIsDrawing(false);
@@ -150,13 +184,33 @@ const Canvas = () => {
     // Continue drawing while pinching
     else if (isPinching && wasPinching) {
       console.log('Adding to stroke'); // Debug log
-      setCurrentStroke(prev => [...prev, { x, y }]);
-    } 
+      
+      const maxDistance = 100;
+      let shouldAddPoint = true;
+      
+      if (currentStrokeRef.current.length > 0) {
+        const prevPoint = currentStrokeRef.current[currentStrokeRef.current.length - 1];
+        const distance = Math.sqrt(
+          Math.pow(prevPoint.x - x, 2) + Math.pow(prevPoint.y - y, 2)
+        );
+        
+        if (distance > maxDistance) {
+          console.log(`Point rejected: distance ${distance.toFixed(2)} exceeds threshold ${maxDistance}`);
+          shouldAddPoint = false;
+        }
+      }
+      
+      if (shouldAddPoint) {
+        setCurrentStroke(prev => [...prev, { x, y }]);
+      }
+    }
     // End drawing when unpinching
     else if (!isPinching && wasPinching) {
       console.log('Ending stroke with:', currentStrokeRef.current);
       if (currentStrokeRef.current.length > 0) {
-        setStrokes(prev => [...prev, [...currentStrokeRef.current]]);
+        // Apply smoothing before adding to strokes array
+        const smoothedStroke = smoothStroke(currentStrokeRef.current);
+        setStrokes(prev => [...prev, smoothedStroke]);
       }
       setCurrentStroke([]);
       setIsDrawing(false);

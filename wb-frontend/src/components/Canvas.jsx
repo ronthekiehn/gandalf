@@ -1,7 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import HandTracking from './HandTracking';
+import * as Y from 'yjs'
+import { WebsocketProvider } from 'y-websocket';
 
 const Canvas = () => {
+  const [provider] = useState(() => {
+    const ydoc = new Y.Doc();
+    // Connect to the WebSocket server
+    const provider = new WebsocketProvider('ws://localhost:1234', 'my-room', ydoc);
+    return provider;
+  });
+  
+  const ydoc = provider.doc;
+  const yStrokes = ydoc.getArray('strokes'); 
+  const awareness = provider.awareness;
+  
   const canvasRef = useRef(null);
   const bgCanvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -17,30 +30,44 @@ const Canvas = () => {
   const prevPinchState = useRef(false);
   const currentStrokeRef = useRef([]);
   const cursorHistoryRef = useRef([]);
-  const cursorHistorySize = 3;
+  const cursorHistorySize = 2;
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-    // Set canvas size to its parent container size
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight - 70; // Adjust for header/footer
-      context.lineJoin = 'round';
-      context.lineCap = 'round';
-      context.lineWidth = linewidth;
-      context.strokeStyle = 'black';
+    const updateLocalAwareness = () => {
+      if (useHandTracking && isHandReady) {
+        awareness.setLocalState({
+          cursor: cursorPosition,
+          isDrawing,
+          user: crypto.randomUUID() // In real app, use actual user ID
+        });
+      } else {
+        awareness.setLocalState(null);
+      }
     };
 
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    setCtx(context);
-
+    updateLocalAwareness();
     return () => {
-      window.removeEventListener('resize', resizeCanvas);
+      awareness.setLocalState(null);
     };
-  }, []);
+  }, [awareness, cursorPosition, isHandReady, useHandTracking, isDrawing]);
 
+  // Sync with Yjs strokes
+  useEffect(() => {
+    const handleStrokesUpdate = () => {
+      setStrokes(yStrokes.toArray());
+    };
+
+    // Initial sync
+    setStrokes(yStrokes.toArray());
+    
+    // Listen for changes
+    yStrokes.observe(handleStrokesUpdate);
+    
+    return () => {
+      yStrokes.unobserve(handleStrokesUpdate);
+    };
+  }, [yStrokes]);
+  
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
@@ -109,7 +136,20 @@ const Canvas = () => {
       ctx.fill();
       ctx.restore();
     }
-  }, [ctx, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking]);
+    
+    // Draw all users' cursors
+    awareness.getStates().forEach((state, clientID) => {
+      if (state.cursor && clientID !== ydoc.clientID) {
+        ctx.save();
+        ctx.fillStyle = state.isDrawing ? 'red' : 'blue';
+        ctx.beginPath();
+        ctx.arc(state.cursor.x, state.cursor.y, 10, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+    
+  }, [ctx, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking, awareness]);
 
   const addStrokeToBackground = (stroke) => {
     const bgCtx = bgCanvasRef.current.getContext('2d');
@@ -176,6 +216,13 @@ const Canvas = () => {
       const smoothedStroke = smoothStroke(currentStroke);
       addStrokeToBackground(smoothedStroke);
       setStrokes(prev => [...prev, smoothedStroke]);
+      const newStroke = { 
+        id: crypto.randomUUID(), 
+        points: smoothedStroke, 
+        color: strokeColor, 
+        width: linewidth 
+      };
+      yStrokes.push([newStroke]);
     }
     setCurrentStroke([]);
     setIsDrawing(false);
@@ -275,6 +322,14 @@ const Canvas = () => {
         const smoothedStroke = smoothStroke(currentStrokeRef.current);
         addStrokeToBackground(smoothedStroke); // Add this line
         setStrokes(prev => [...prev, smoothedStroke]);
+        const newStroke = { 
+          id: crypto.randomUUID(), 
+          points: smoothedStroke, 
+          color: strokeColor, 
+          width: linewidth
+        };
+        yStrokes.push([smoothedStroke]); // Sync to Yjs
+
       }
       setCurrentStroke([]);
       setIsDrawing(false);
@@ -333,30 +388,30 @@ const Canvas = () => {
       <div className="slider-container">
         <label htmlFor="linewidth" className="text-sm text-gray-700">Line Width: </label>
         <input
-        type="range"
-        id="linewidth"
-        name="linewidth"
-        min="1"
-        max="10"
-        value={linewidth}
-        onChange={(e) => {
-        const newWidth = Math.max(1, Math.min(10, parseInt(e.target.value)));
-        setLinewidth(newWidth);
-        setCtx((prevCtx) => {
-        if (prevCtx) {
-        prevCtx.lineWidth = newWidth;
-        }
-        return prevCtx;
-        });
-        }}
-        className="w-full"
-        style={{
-        background: `linear-gradient(to right, #000000 0%, #000000 ${linewidth / 10 * 100}%, #ccc ${linewidth / 10 * 100}%, #ccc 100%)`
-        }}
-        />
+          type="range"
+          id="linewidth"
+          name="linewidth"
+          min="2"
+          max="10"
+          value={linewidth}
+          onChange={(e) => {
+          const newWidth = Math.max(2, Math.min(10, parseInt(e.target.value)));
+            setLinewidth(newWidth);
+            setCtx((prevCtx) => {
+              if (prevCtx) {
+                  prevCtx.lineWidth = newWidth;
+                }
+                return prevCtx;
+              });
+            }}
+          className="w-full"
+          style={{
+            background: `linear-gradient(to right, #000000 0%, #000000 ${linewidth / 10 * 100}%, #ccc ${linewidth / 10 * 100}%, #ccc 100%)`
+          }}
+          />
         </div>
       {/* Color Buttons */}
-      <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
         <button
           className="w-10 h-10 rounded-full bg-black shadow-lg hover:opacity-80"
           onClick={() => setStrokeColor('black')}

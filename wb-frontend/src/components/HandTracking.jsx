@@ -103,7 +103,8 @@ const HandTracking = ({ onHandUpdate }) => {
             // Calculate distance for pinch detection
             const distance = Math.sqrt(
               Math.pow(indexTip.x - thumbTip.x, 2) + 
-              Math.pow(indexTip.y - thumbTip.y, 2)
+              Math.pow(indexTip.y - thumbTip.y, 2) +
+              Math.pow(indexTip.z - thumbTip.z, 2)
             );
             
             // Update parent component
@@ -112,7 +113,7 @@ const HandTracking = ({ onHandUpdate }) => {
                 x: indexTip.x * videoRef.current.videoWidth,
                 y: indexTip.y * videoRef.current.videoHeight
               },
-              isPinching: distance < 0.1, // Normalized distance threshold
+              isPinching: distance < 0.08, // Normalized distance threshold
               landmarks: landmarks,
               handedness: handedness.categoryName
             });

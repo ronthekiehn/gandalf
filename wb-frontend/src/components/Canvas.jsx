@@ -3,6 +3,7 @@ import HandTracking from './HandTracking';
 
 const Canvas = () => {
   const canvasRef = useRef(null);
+  const bgCanvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [ctx, setCtx] = useState(null);
   const [currentStroke, setCurrentStroke] = useState([]);
@@ -38,33 +39,53 @@ const Canvas = () => {
   }, []);
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    
+    // Create background canvas
+    const bgCanvas = document.createElement('canvas');
+    bgCanvasRef.current = bgCanvas;
+    const bgCtx = bgCanvas.getContext('2d');
+    
+    // Set canvas size to its parent container size
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - 70;
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight - 70;
+      
+      // Set drawing styles for both canvases
+      [context, bgCtx].forEach(ctx => {
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'black';
+      });
+    };
+    
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    setCtx(context);
+    
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+    };
+  }, []);
+  
+  useEffect(() => {
     currentStrokeRef.current = currentStroke;
   }, [currentStroke]);
   
   useEffect(() => {
     if (!ctx) return;
     
-    console.log('Rendering canvas:', { 
-      strokesCount: strokes.length,
-      currentStrokeLength: currentStroke.length,
-      isDrawing
-    });
-    
+    // Clear the main canvas
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     
-    strokes.forEach(stroke => {
-      if (stroke.length < 2) return;
-      
-      ctx.beginPath();
-      ctx.moveTo(stroke[0].x, stroke[0].y);
-      
-      for (let i = 1; i < stroke.length; i++) {
-        ctx.lineTo(stroke[i].x, stroke[i].y);
-      }
-      
-      ctx.stroke();
-    });
+    // Draw the background canvas (contains all completed strokes)
+    ctx.drawImage(bgCanvasRef.current, 0, 0);
     
+    // Only draw the current stroke on the main canvas
     if (currentStroke.length > 0) {
       ctx.beginPath();
       ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
@@ -85,8 +106,21 @@ const Canvas = () => {
       ctx.fill();
       ctx.restore();
     }
-  }, [ctx, strokes, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking]);
+  }, [ctx, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking]);
 
+  const addStrokeToBackground = (stroke) => {
+    const bgCtx = bgCanvasRef.current.getContext('2d');
+    
+    bgCtx.beginPath();
+    bgCtx.moveTo(stroke[0].x, stroke[0].y);
+    
+    for (let i = 1; i < stroke.length; i++) {
+      bgCtx.lineTo(stroke[i].x, stroke[i].y);
+    }
+    
+    bgCtx.stroke();
+  };
+  
   // Chaikin Smoothing Algorithm
   const smoothStroke = (points, iterations = 12) => {
     if (points.length < 2) return points;
@@ -135,14 +169,14 @@ const Canvas = () => {
   const endDrawing = () => {
     if (!isDrawing || useHandTracking) return;
     if (currentStroke.length > 0) {
-      // Apply smoothing before adding to strokes array
       const smoothedStroke = smoothStroke(currentStroke);
+      addStrokeToBackground(smoothedStroke);
       setStrokes(prev => [...prev, smoothedStroke]);
     }
     setCurrentStroke([]);
     setIsDrawing(false);
   };
-
+  
   const getPointerPosition = (e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -186,6 +220,7 @@ const Canvas = () => {
       console.log('Adding to stroke'); // Debug log
       
       const maxDistance = 100;
+      const minDistance = 5;
       let shouldAddPoint = true;
       
       if (currentStrokeRef.current.length > 0) {
@@ -194,7 +229,7 @@ const Canvas = () => {
           Math.pow(prevPoint.x - x, 2) + Math.pow(prevPoint.y - y, 2)
         );
         
-        if (distance > maxDistance) {
+        if (distance > maxDistance|| distance < minDistance) {
           console.log(`Point rejected: distance ${distance.toFixed(2)} exceeds threshold ${maxDistance}`);
           shouldAddPoint = false;
         }
@@ -210,6 +245,7 @@ const Canvas = () => {
       if (currentStrokeRef.current.length > 0) {
         // Apply smoothing before adding to strokes array
         const smoothedStroke = smoothStroke(currentStrokeRef.current);
+        addStrokeToBackground(smoothedStroke); // Add this line
         setStrokes(prev => [...prev, smoothedStroke]);
       }
       setCurrentStroke([]);
@@ -229,6 +265,8 @@ const Canvas = () => {
   
   // Clear all strokes
   const clearCanvas = () => {
+    const bgCtx = bgCanvasRef.current.getContext('2d');
+    bgCtx.clearRect(0, 0, bgCanvasRef.current.width, bgCanvasRef.current.height);
     setStrokes([]);
     setCurrentStroke([]);
     setIsDrawing(false);

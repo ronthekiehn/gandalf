@@ -14,7 +14,9 @@ const Canvas = () => {
   const [isHandReady, setIsHandReady] = useState(false);
   const prevPinchState = useRef(false);
   const currentStrokeRef = useRef([]);
-
+  const cursorHistoryRef = useRef([]);
+  const cursorHistorySize = 3; 
+  
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
@@ -185,6 +187,24 @@ const Canvas = () => {
     return { x, y };
   };
 
+  const smoothCursorPosition = (newPosition) => {
+    cursorHistoryRef.current.push(newPosition);
+    if (cursorHistoryRef.current.length > cursorHistorySize) {
+      cursorHistoryRef.current.shift();
+    }
+
+    // Calculate average position
+    const smoothedPosition = cursorHistoryRef.current.reduce(
+      (acc, pos) => ({
+        x: acc.x + pos.x / cursorHistoryRef.current.length,
+        y: acc.y + pos.y / cursorHistoryRef.current.length
+      }),
+      { x: 0, y: 0 }
+    );
+
+    return smoothedPosition;
+  };
+
   // Handle hand tracking updates
   const handleHandUpdate = (handData) => {
     console.log('Current stroke:', currentStroke)
@@ -200,7 +220,9 @@ const Canvas = () => {
     const x = canvas.width - handData.position.x * scaleX;
     const y = handData.position.y * scaleY;
 
-    setCursorPosition({ x, y });
+    // Apply smoothing to cursor position
+    const smoothedPosition = smoothCursorPosition({ x, y });
+    setCursorPosition(smoothedPosition);
     setShowCursor(true);
 
     // Detect change in pinch state
@@ -240,11 +262,7 @@ const Canvas = () => {
       }
 
       if (shouldAddPoint) {
-        // Interpolate points between the last point and the new point
-        const lastPoint = currentStrokeRef.current[currentStrokeRef.current.length - 1];
-        const interpolatedPoints = interpolatePoints(lastPoint, { x, y }, 5);
-        setCurrentStroke(prev => [...prev, ...interpolatedPoints]);
-
+        setCurrentStroke(prev => [...prev, { x, y }]);
       }
     }
     // End drawing when unpinching

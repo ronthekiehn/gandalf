@@ -7,7 +7,21 @@ const Canvas = () => {
   // Create Yjs document and provider
   const [provider] = useState(() => {
     const ydoc = new Y.Doc();
-    const provider = new WebsocketProvider('ws://10.150.7.104:1234', 'my-room', ydoc);
+    const roomCode = new URLSearchParams(window.location.search).get('room') || 'default';
+    const wsHost = process.env.REACT_APP_WS_HOST || '10.150.7.104:1234';
+    const provider = new WebsocketProvider(`ws://${wsHost}`, roomCode, ydoc, {
+      connect: true,
+      params: { room: roomCode }
+    });
+
+    provider.on('status', ({ status }) => {
+      console.log('Connection status:', status);
+    });
+
+    provider.on('sync', (isSynced) => {
+      console.log('Sync status:', isSynced);
+    });
+
     return provider;
   });
 

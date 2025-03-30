@@ -153,7 +153,7 @@ const HandTracking = ({ onHandUpdate }) => {
                 x: indexTip.x * videoRef.current.videoWidth,
                 y: indexTip.y * videoRef.current.videoHeight
               },
-              isPinching: pinch_distance < 0.12,
+              isPinching: pinch_distance < 0.08,
               isFist: shouldClear,
               isClicking: thumb_ring_distance < 0.08,
               isGen: shouldGenerate,

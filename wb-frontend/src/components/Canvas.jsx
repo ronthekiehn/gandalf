@@ -699,7 +699,7 @@ const Canvas = ({ roomCode }) => {
 
   return (
     <DarkModeContext.Provider value={{ darkMode, setDarkMode }}>
-      <div className={`min-h-screen w-full flex justify-center ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
+      <div className={`h-full w-full flex justify-center ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
         <div className={`bg-white absolute bottom-4 px-3 py-2 flex gap-4 justify-between items-center shadow-lg rounded-2xl shadow-neutral-500 border border-stone-300 ${darkMode ? 'text-white' : 'text-black'}`}>
           <button
             className="cursor-pointer p-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -768,7 +768,7 @@ const Canvas = ({ roomCode }) => {
          
         </div>
         
-        <div className='fixed top-2 right-4 flex gap-2 items-center'>
+        <div className='absolute top-2 right-4 flex gap-2 items-center'>
             {Array.from(awareness.getStates())
               .filter(([_, state]) => state.user?.name && state.user?.color)
               .map(([clientID, state]) => (
@@ -779,7 +779,7 @@ const Canvas = ({ roomCode }) => {
               ))}
           </div>
         <div className={`absolute top-12 right-4 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-2 
-         bg-white px-4 py-6 rounded-xl shadow-sm border border-stone-300 shadow-neutral-500 flex flex-col gap-4`}>
+         bg-white px-4 pb-4 pt-5 rounded-xl shadow-sm border border-stone-300 shadow-neutral-500 flex flex-col gap-4`}>
        
             <input
               type="text"

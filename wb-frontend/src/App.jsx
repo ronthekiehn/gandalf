@@ -77,10 +77,10 @@ function App() {
 // Room selection UI
 if (!roomCode) {
   return (
-    <div className="min-h-screen w-full flex flex-col">
-      <main className="grow flex flex-col items-center justify-center gap-10">
+    <div className="fade-in h-screen w-full flex flex-col">
+      <main className="grow flex flex-col items-center justify-center gap-10 mb-20">
         <h1 className="sm:text-9xl text-6xl font-bold mb-4">Gandalf</h1>
-        <div className="relative bg-white px-4 py-6 rounded-xl shadow-md border border-stone-300 shadow-neutral-500 flex flex-col gap-4" >
+        <div className="relative bg-white px-4 py-6 rounded-2xl shadow-md border border-stone-300 shadow-neutral-500 flex flex-col gap-4" >
 
       <div className="relative w-full min-w-[200px] shadow-xl max-w-xs h-14 bg-gray-100 rounded-full cursor-pointer border border-stone-300"
       onClick={() => setCreateMode(!createMode)}
@@ -137,12 +137,12 @@ if (!roomCode) {
 }
 
 return (
-  <div className="min-h-screen w-full flex flex-col">
+  <div className="h-screen w-full flex flex-col">
     <header className="">
       <h1 className="p-2 text-2xl font-bold">Gandalf<span className="text-neutral-400">.design/{roomCode}</span></h1>
     </header>
     
-    <main className="grow flex">
+    <main className="grow flex h-[calc(100vh-3rem)]">
       <div className="w-full h-full">
         <Canvas roomCode={roomCode} />
       </div>

@@ -9,8 +9,8 @@ const HandTracking = ({ onHandUpdate }) => {
   const lastVideoTimeRef = useRef(-1);
   const fistStartTimeRef = useRef(null);
   const pinkyStartTimeRef = useRef(null);
-  const FIST_CLEAR_DELAY = 500; // 0.5 seconds in milliseconds
-  const PINKY_CLEAR_DELAY = 1000; // 2 seconds in milliseconds
+  const FIST_CLEAR_DELAY = 1000; // 1 seconds in milliseconds
+  const PINKY_CLEAR_DELAY = 1000; // 1 seconds in milliseconds
 
   useEffect(() => {
     async function initializeHandLandmarker() {
@@ -125,7 +125,7 @@ const HandTracking = ({ onHandUpdate }) => {
               Math.pow(thumbTip.z - pinkyTip.z, 2)
             );
 
-            const isFistNow = fist_distance < 0.3;
+            const isFistNow = fist_distance < 0.25;
             const isPinkyThumbNow = thumb_pinky_distance < 0.08;
 
             // Handle fist gesture timing
@@ -153,7 +153,7 @@ const HandTracking = ({ onHandUpdate }) => {
                 x: indexTip.x * videoRef.current.videoWidth,
                 y: indexTip.y * videoRef.current.videoHeight
               },
-              isPinching: pinch_distance < 0.08,
+              isPinching: pinch_distance < 0.12,
               isFist: shouldClear,
               isClicking: thumb_ring_distance < 0.08,
               isGen: shouldGenerate,

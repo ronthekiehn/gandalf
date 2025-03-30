@@ -294,8 +294,7 @@ server.listen(port, host, () => {
 const renderStrokesToCanvas = (strokes) => {
   console.log('Starting canvas rendering:', { strokeCount: strokes?.length });
   
-  // Create new canvas with fixed dimensions
-  const canvas = createCanvas(800, 600);
+  const canvas = createCanvas(2500, 1600);
   const ctx = canvas.getContext('2d');
   
   // Set white background

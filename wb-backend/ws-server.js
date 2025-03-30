@@ -4,7 +4,7 @@ const { setupWSConnection } = require('y-websocket/bin/utils.js')
 const crypto = require('crypto')
 
 // Use environment variables or default values
-const port = process.env.PORT || 1234
+const port = process.env.PORT || 80
 const host = process.env.HOST || '0.0.0.0'
 
 // Add these constants at the top after the imports

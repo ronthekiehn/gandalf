@@ -89,7 +89,7 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
       if (Math.abs(aspectRatio - 1) < 0.2) {
         return { type: 'square', x: minX, y: minY, size: Math.max(width, height) };
       }
-      return { type: 'rectangle', x: minX, y: minY, width, height };
+      return { type: 'rectangle', x: minX, y: minY, w: width, h: height };
     }
 
     // Triangle detection
@@ -136,7 +136,6 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
             });
           }
           break;
-        case 'rectangle':
         case 'square':
           const size = shape.size || shape.width;
           perfectPoints = [
@@ -155,33 +154,39 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
             shape.vertices[0]
           ];
           break;
+        case 'rectangle':
+            perfectPoints = [
+                { x: shape.x, y: shape.y },                    // Top-left
+                { x: shape.x + shape.w, y: shape.y },      // Top-right
+                { x: shape.x + shape.w, y: shape.y + shape.h }, // Bottom-right
+                { x: shape.x, y: shape.y + shape.h },     // Bottom-left
+                { x: shape.x, y: shape.y }                     // Back to start
+            ];
+            break;
       }
 
-      // Clear original stroke with padding
-      const boundingBox = {
-        minX: Math.min(...stroke.points.map(p => p.x)),
-        maxX: Math.max(...stroke.points.map(p => p.x)),
-        minY: Math.min(...stroke.points.map(p => p.y)),
-        maxY: Math.max(...stroke.points.map(p => p.y))
-      };
+        // Clear original stroke using stroke path
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = stroke.width + 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
 
-      const padding = stroke.width * 2;
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = '#000';
-      ctx.fillRect(
-        boundingBox.minX - padding,
-        boundingBox.minY - padding,
-        boundingBox.maxX - boundingBox.minX + padding * 2,
-        boundingBox.maxY - boundingBox.minY + padding * 2
-      );
-      ctx.restore();
+        // Follow the original stroke path
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+            ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+        ctx.restore();
 
-      // Draw perfect shape
-      ctx.save();
-      ctx.beginPath();
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.width;
+        // Then draw the perfect shape (existing code remains the same)
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.width;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 

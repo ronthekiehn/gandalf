@@ -272,10 +272,45 @@ const addStrokeToBackground = (stroke) => {
 
 
   const endDrawing = () => {
-    
     if (!isDrawing || useHandTracking) return;
-    
     if (currentStrokeRef.current.length > 0) {
+      // Apply compression to reduce number of points before sending to backend
+      const compressStroke = (points) => {
+        if (points.length <= 2) return points;
+        
+        const tolerance = 2; // Adjust based on desired compression level
+        const result = [points[0]]; // Always keep the first point
+        
+        for (let i = 1; i < points.length - 1; i++) {
+          const prev = result[result.length - 1];
+          const current = points[i];
+          const next = points[i + 1];
+          
+          // Calculate if the current point significantly deviates from a straight line
+          const dx1 = current.x - prev.x;
+          const dy1 = current.y - prev.y;
+          const dx2 = next.x - current.x;
+          const dy2 = next.y - current.y;
+          
+          // Calculate angle change
+          const angle1 = Math.atan2(dy1, dx1);
+          const angle2 = Math.atan2(dy2, dx2);
+          const angleDiff = Math.abs(angle1 - angle2);
+          
+          // Keep points where direction changes significantly
+          if (angleDiff > tolerance * 0.1 || 
+              Math.sqrt(dx1*dx1 + dy1*dy1) > tolerance * 5) {
+            result.push(current);
+          }
+        }
+        
+        result.push(points[points.length - 1]); // Always keep the last point
+        return result;
+      }
+
+      // Compress the stroke before adding it to the background
+      const compressedStroke = compressStroke(currentStrokeRef.current);
+      addStrokeToBackground(compressedStroke);
       addStrokeToBackground(currentStrokeRef.current);
     }
     

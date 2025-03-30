@@ -9,7 +9,7 @@ const HandTracking = ({ onHandUpdate }) => {
   const lastVideoTimeRef = useRef(-1);
   const fistStartTimeRef = useRef(null);
   const pinkyStartTimeRef = useRef(null);
-  const FIST_CLEAR_DELAY = 1000; // 1 seconds in milliseconds
+  const FIST_CLEAR_DELAY = 2000; // 1 seconds in milliseconds
   const PINKY_CLEAR_DELAY = 1000; // 1 seconds in milliseconds
 
   useEffect(() => {

@@ -4,9 +4,25 @@ import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket';
 
 const Canvas = () => {
+  const [userName, setUserName] = useState(() => {
+    const savedName = localStorage.getItem('wb-username');
+    return savedName || `User-${Math.floor(Math.random() * 1000)}`;
+  });
+
+  useEffect(() => {
+    // Clear anonymous usernames from localStorage
+    const savedName = localStorage.getItem('wb-username');
+    if (savedName && /^User-\d+$/.test(savedName)) {
+      localStorage.removeItem('wb-username');
+      setUserName('');
+    }
+  }, []);
+
   const [provider] = useState(() => {
     const ydoc = new Y.Doc();
-    const provider = new WebsocketProvider('ws://10.150.155.65:1234', 'my-room', ydoc);
+    const wsUrl = new URL('ws://localhost:1234');
+    wsUrl.searchParams.set('username', userName);
+    const provider = new WebsocketProvider(wsUrl.toString(), 'my-roomname', ydoc);
     return provider;
   });
 
@@ -25,20 +41,23 @@ const Canvas = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const strokeColorRef = useRef('black');
   const linewidthRef = useRef(3);
+  const [lineWidth, setLineWidth] = useState(3);
   const [ctx, setCtx] = useState(null);
   const [currentStroke, setCurrentStroke] = useState([]);
   const [useHandTracking, setUseHandTracking] = useState(false);
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [showCursor, setShowCursor] = useState(false);
   const [isHandReady, setIsHandReady] = useState(false);
+  const [textboxes, setTextboxes] = useState([]);
+  const [selectedTextbox, setSelectedTextbox] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const resizeStartPos = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const prevPinchState = useRef(false);
   const currentStrokeRef = useRef([]);
   const cursorHistoryRef = useRef([]);
   const cursorHistorySize = 2;
-  const [userName, setUserName] = useState(() => {
-    const savedName = localStorage.getItem('wb-username');
-    return savedName || `User-${Math.floor(Math.random() * 1000)}`;
-  });
 
   useEffect(() => {
     bgCanvasRef.current = bgCanvas;
@@ -74,7 +93,6 @@ const Canvas = () => {
       awareness.setLocalState(null);
     };
   }, [awareness, cursorPosition, isHandReady, useHandTracking, isDrawing, userName]);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
@@ -92,7 +110,7 @@ const Canvas = () => {
       [context, bgCanvasRef.current.getContext('2d')].forEach(ctx => {
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.lineWidth = linewidthRef.current;
+        ctx.lineWidth = lineWidth;
         ctx.strokeStyle = strokeColorRef.current;
       });
     };
@@ -223,6 +241,115 @@ const Canvas = () => {
       cancelAnimationFrame(animationFrame);
     };
   }, [ctx, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking, awareness, yStrokes, provider, ydoc.clientID]);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isDragging && selectedTextbox !== null) {
+        const dx = e.clientX - dragStartPos.current.x;
+        const dy = e.clientY - dragStartPos.current.y;
+
+        setTextboxes(boxes => boxes.map((box, i) =>
+          i === selectedTextbox
+            ? {
+                ...box,
+                x: box.x + dx,
+                y: box.y + dy
+              }
+            : box
+        ));
+
+        dragStartPos.current = { x: e.clientX, y: e.clientY };
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, selectedTextbox]);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isResizing && selectedTextbox !== null) {
+        const dx = e.clientX - resizeStartPos.current.x;
+        const dy = e.clientY - resizeStartPos.current.y;
+
+        setTextboxes(boxes => boxes.map((box, i) =>
+          i === selectedTextbox
+            ? {
+                ...box,
+                width: Math.max(200, resizeStartPos.current.width + dx),
+                height: Math.max(40, resizeStartPos.current.height + dy)
+              }
+            : box
+        ));
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, selectedTextbox]);
+
+  const addTextbox = () => {
+    const centerX = canvasRef.current.width / 2;
+    const centerY = canvasRef.current.height / 2;
+
+    setTextboxes(prev => [...prev, {
+      id: crypto.randomUUID(),
+      x: centerX - 100,
+      y: centerY - 20,
+      text: '',
+      color: strokeColorRef.current,
+      width: 200,
+      height: 40
+    }]);
+  };
+
+  const deleteTextbox = (index) => {
+    setTextboxes(prev => prev.filter((_, i) => i !== index));
+    setSelectedTextbox(null);
+  };
+
+  const handleResizeStart = (e, index) => {
+    e.stopPropagation();
+    setSelectedTextbox(index);
+    setIsResizing(true);
+    const box = textboxes[index];
+    resizeStartPos.current = {
+      x: e.clientX,
+      y: e.clientY,
+      width: box.width,
+      height: box.height
+    };
+  };
+
+  const handleTextboxClick = (e, index) => {
+    e.stopPropagation();
+    setSelectedTextbox(index);
+  };
+
+  const handleTextboxDragStart = (e, index) => {
+    e.stopPropagation();
+    setSelectedTextbox(index);
+    setIsDragging(true);
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+  };
 
   const addStrokeToBackground = (stroke) => {
     const smoothedStroke = smoothStroke(stroke);
@@ -412,17 +539,17 @@ const Canvas = () => {
         Clear
       </button>
       <div className="slider-container">
-        <label htmlFor="linewidth" className="text-sm text-gray-700">Line Width: </label>
         <input
           type="range"
           id="linewidth"
           name="linewidth"
           min="2"
           max="10"
-          value={linewidthRef.current}
+          value={lineWidth}
           onChange={(e) => {
             const newWidth = Math.max(2, Math.min(10, parseInt(e.target.value)));
             linewidthRef.current = newWidth;
+            setLineWidth(newWidth);
             setCtx((prevCtx) => {
               if (prevCtx) {
                 prevCtx.lineWidth = newWidth;
@@ -430,9 +557,8 @@ const Canvas = () => {
               return prevCtx;
             });
           }}
-          className="w-full"
           style={{
-            background: `linear-gradient(to right, #000000 0%, #000000 ${linewidthRef.current / 10 * 100}%, #ccc ${linewidthRef.current / 10 * 100}%, #ccc 100%)`
+            background: `linear-gradient(to right, #000000 0%, #000000 ${lineWidth / 10 * 100}%, #ccc ${lineWidth / 10 * 100}%, #ccc 100%)`
           }}
         />
       </div>
@@ -458,6 +584,14 @@ const Canvas = () => {
           aria-label="Green"
         />
       </div>
+
+      <button
+        className="bg-purple-600 text-white p-2 rounded-full shadow-lg hover:bg-purple-700 flex items-center justify-center gap-2"
+        onClick={addTextbox}
+      >
+        <span>📝</span> Add Text
+      </button>
+
       <div className="mb-4">
         <input
           type="text"
@@ -479,9 +613,9 @@ const Canvas = () => {
           <li key={clientID} className="flex items-center gap-2">
             <span
               className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: state.user?.color || 'gray' }}
+              style={{ backgroundColor: state.user?.color}}
             />
-            {state.user?.name || 'Anonymous'}
+            {state.user?.name}
           </li>
         ))}
       </ul>
@@ -499,6 +633,50 @@ const Canvas = () => {
       />
 
       {useHandTracking && <HandTracking onHandUpdate={handleHandUpdate} />}
+      
+      {textboxes.map((box, index) => (
+        <div
+          key={box.id}
+          className={`absolute pointer-events-auto group`}
+          style={{
+            left: box.x,
+            top: box.y,
+            width: box.width || '200px',
+            height: box.height || '40px',
+            position: 'absolute'
+          }}
+          onClick={(e) => handleTextboxClick(e, index)}
+          onMouseDown={(e) => handleTextboxDragStart(e, index)}
+        >
+          <button
+            className="w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity absolute -top-3 -right-3"
+            onClick={() => deleteTextbox(index)}
+          >
+            ×
+          </button>
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{
+              background: 'linear-gradient(135deg, transparent 50%, #4B5563 50%)'
+            }}
+            onMouseDown={(e) => handleResizeStart(e, index)}
+          />
+          <textarea
+            value={box.text}
+            onChange={(e) => {
+              setTextboxes(boxes =>
+                boxes.map((b, i) =>
+                  i === index ? { ...b, text: e.target.value } : b
+                )
+              );
+            }}
+            className="w-full h-full p-2 bg-white/90 border rounded-xl resize-none focus:outline-none"
+            placeholder="Type here..."
+            style={{ color: box.color }}
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      ))}
 
       {useHandTracking && !isHandReady && (
         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white p-4 rounded-md z-50">

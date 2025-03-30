@@ -1,5 +1,9 @@
 {
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "cors": "^2.8.5",
+    "http": "^0.0.1-security",
+    "mime-types": "^3.0.1",
     "ws": "^8.18.1",
     "y-websocket": "^1.3.12"
   }

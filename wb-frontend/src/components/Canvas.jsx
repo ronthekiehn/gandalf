@@ -397,7 +397,7 @@ const Canvas = () => {
 
   return (
     <>
-    <div className="absolute top-20 right-4 flex flex-col gap-2">
+    <div className="absolute top-15 right-4 flex flex-col gap-2">
       <button
         className="bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700"
         onClick={toggleHandTracking}
@@ -472,7 +472,7 @@ const Canvas = () => {
         />
       </div>
     </div>
-    <div className="absolute top-20 left-4 bg-white/90 p-2 rounded shadow-lg">
+    <div className="absolute top-15 left-4 bg-white/90 p-2 rounded shadow-lg">
       <h3 className="font-bold mb-2">Connected Users:</h3>
       <ul>
         {Array.from(awareness.getStates()).map(([clientID, state]) => (

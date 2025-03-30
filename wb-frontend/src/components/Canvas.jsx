@@ -4,7 +4,7 @@ import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket';
 import AdvancedFeatures from './AdvancedFeatures';
 import { DarkModeContext } from '../contexts/DarkModeContext';
-import { X, Mouse, Hand, Type } from 'lucide-react';
+import { X, Mouse, Hand, Type , Eraser } from 'lucide-react';
 
 const Canvas = ({ roomCode }) => {
   const [userName, setUserName] = useState(() => {
@@ -161,7 +161,7 @@ const Canvas = ({ roomCode }) => {
 
       targetCtx.save();
       targetCtx.strokeStyle = stroke.color || 'black';
-      targetCtx.lineWidth = stroke.width || linewidthRef.current;
+      targetCtx.lineWidth = stroke.width || (strokeColorRef.current === 'white' ? linewidthRef.current * 10 : linewidthRef.current);
       targetCtx.beginPath();
       targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
 
@@ -215,7 +215,7 @@ const Canvas = ({ roomCode }) => {
         const tempStroke = {
           points: currentStroke,
           color: strokeColorRef.current,
-          width: linewidthRef.current
+          width: (strokeColorRef.current === 'white' ? linewidthRef.current * 10 : linewidthRef.current)
         };
         renderStroke(tempStroke, ctx);
       }
@@ -413,7 +413,7 @@ const Canvas = ({ roomCode }) => {
       id: crypto.randomUUID(),
       points: smoothedStroke,
       color: strokeColorRef.current,
-      width: linewidthRef.current
+      width: (strokeColorRef.current === 'white' ? linewidthRef.current * 10 : linewidthRef.current)
     };
 
     yStrokes.push([newStroke]);
@@ -479,7 +479,7 @@ const Canvas = ({ roomCode }) => {
         detail: {
           points: compressedStroke,
           color: strokeColorRef.current,
-          width: linewidthRef.current
+          width: (strokeColorRef.current === 'white' ? linewidthRef.current * 10 : linewidthRef.current)
         }
       });
       canvasRef.current.dispatchEvent(strokeEndEvent);
@@ -589,7 +589,7 @@ const Canvas = ({ roomCode }) => {
           detail: {
             points: compressedStroke,
             color: strokeColorRef.current,
-            width: linewidthRef.current
+            width: (strokeColorRef.current === 'white' ? linewidthRef.current * 10 : linewidthRef.current)
           }
         });
         canvasRef.current.dispatchEvent(strokeEndEvent);
@@ -723,8 +723,23 @@ const Canvas = ({ roomCode }) => {
                 aria-label={color}
               />
             ))}
+
+            {/* Add Eraser Button */}
+            <button
+              className={`cursor-pointer w-6 h-6 rounded-full hover:opacity-80 flex items-center justify-center bg-gray-100 ${
+                strokeColorRef.current === 'white' ? 'ring-2 ring-offset-2 ring-white' : ''
+              }`}
+              onClick={() => {
+                strokeColorRef.current = 'white';
+                setCurrentColorIndex(-1); // Set to -1 to indicate none of the regular colors are selected
+              }}
+              aria-label="Eraser"
+            >
+              <Eraser size={14} />
+            </button>
           </div>
-        
+
+
           <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
             <label htmlFor="linewidth" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}></label>
             <input
@@ -758,16 +773,16 @@ const Canvas = ({ roomCode }) => {
           >
             <Type />
           </button>
-          
+
           <button
             className="cursor-pointer text-red p-2 rounded-full text-red-500 hover:bg-gray-100 transition-colors"
             onClick={clearCanvas}
           >
             <X />
           </button>
-         
+
         </div>
-        
+
         <div className='absolute top-2 right-4 flex gap-2 items-center'>
             {Array.from(awareness.getStates())
               .filter(([_, state]) => state.user?.name && state.user?.color)
@@ -778,9 +793,9 @@ const Canvas = ({ roomCode }) => {
                 </p>
               ))}
           </div>
-        <div className={`absolute top-12 right-4 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-2 
+        <div className={`absolute top-12 right-4 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-2
          bg-white px-4 pb-4 pt-5 rounded-xl shadow-sm border border-stone-300 shadow-neutral-500 flex flex-col gap-4`}>
-       
+
             <input
               type="text"
               value={userName}
@@ -801,7 +816,7 @@ const Canvas = ({ roomCode }) => {
           >
             {isGenerating ? '⏳ Generating...' : 'Improve Image ✨'}
           </button>
-          
+
           <AdvancedFeatures
           canvasRef={canvasRef}
           bgCanvasRef={bgCanvasRef}
@@ -809,8 +824,8 @@ const Canvas = ({ roomCode }) => {
           awareness={awareness}
         />
 
-         
-          
+
+
         </div>
         <canvas
           ref={canvasRef}
@@ -876,7 +891,7 @@ const Canvas = ({ roomCode }) => {
           </div>
         )}
 
-       
+
       </div>
 
       {generatedImages.length > 0 && (

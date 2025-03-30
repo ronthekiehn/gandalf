@@ -25,13 +25,13 @@ const Canvas = ({ roomCode }) => {
     wsUrl.searchParams.set('room', roomCode);
     wsUrl.pathname = `/${roomCode}`;
     console.log(`Connecting to room: ${roomCode}`);
-    
+
     const provider = new WebsocketProvider(wsUrl.toString(), roomCode, ydoc);
-    
+
     provider.on('status', (event) => {
       console.log(`Room ${roomCode} - WebSocket status:`, event.status);
     });
-    
+
     return provider;
   });
 
@@ -110,10 +110,10 @@ const Canvas = ({ roomCode }) => {
     const resizeCanvas = () => {
       const width = window.innerWidth;
       const height = window.innerHeight - 70;
-      
+
       canvas.width = width;
       canvas.height = height;
-      
+
       bgCanvasRef.current.width = width;
       bgCanvasRef.current.height = height;
 
@@ -143,17 +143,17 @@ const Canvas = ({ roomCode }) => {
 
     const renderStroke = (stroke, targetCtx) => {
       if (!stroke || !stroke.points || stroke.points.length === 0) return;
-      
+
       targetCtx.save();
       targetCtx.strokeStyle = stroke.color || 'black';
       targetCtx.lineWidth = stroke.width || linewidthRef.current;
       targetCtx.beginPath();
       targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      
+
       for (let i = 1; i < stroke.points.length; i++) {
         targetCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
       }
-      
+
       targetCtx.stroke();
       targetCtx.restore();
     };
@@ -161,7 +161,7 @@ const Canvas = ({ roomCode }) => {
     const loadExistingStrokes = () => {
       const bgCtx = bgCanvasRef.current.getContext('2d');
       bgCtx.clearRect(0, 0, bgCtx.canvas.width, bgCtx.canvas.height);
-      
+
       yStrokes.forEach(item => {
         const stroke = Array.isArray(item) ? item[0] : item;
         renderStroke(stroke, bgCtx);
@@ -170,7 +170,7 @@ const Canvas = ({ roomCode }) => {
 
     const handleStrokeAdded = (event) => {
       const bgCtx = bgCanvasRef.current.getContext('2d');
-      
+
       event.changes.added.forEach(item => {
         let content;
         if (item.content && item.content.getContent) {
@@ -181,7 +181,7 @@ const Canvas = ({ roomCode }) => {
           console.warn("Unexpected content format:", item.content);
           return;
         }
-        
+
         for (let i = 0; i < content.length; i++) {
           const strokeData = content[i];
           const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
@@ -195,7 +195,7 @@ const Canvas = ({ roomCode }) => {
     const renderCanvas = () => {
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.drawImage(bgCanvasRef.current, 0, 0);
-      
+
       if (currentStroke.length > 0) {
         const tempStroke = {
           points: currentStroke,
@@ -208,19 +208,19 @@ const Canvas = ({ roomCode }) => {
       awareness.getStates().forEach((state, clientID) => {
         if (state.cursor && clientID !== ydoc.clientID) {
           ctx.save();
-          
+
           ctx.fillStyle = state.isDrawing ? state.user.color : 'gray';
           ctx.beginPath();
           ctx.arc(state.cursor.x, state.cursor.y, 10, 0, 2 * Math.PI);
           ctx.fill();
-          
+
           ctx.font = '14px Arial';
           ctx.fillStyle = 'white';
           ctx.strokeStyle = 'black';
           ctx.lineWidth = 3;
           ctx.strokeText(state.user.name, state.cursor.x + 15, state.cursor.y + 15);
           ctx.fillText(state.user.name, state.cursor.x + 15, state.cursor.y + 15);
-          
+
           ctx.restore();
         }
       });
@@ -242,7 +242,7 @@ const Canvas = ({ roomCode }) => {
 
     yStrokes.observe(handleStrokeAdded);
     provider.on('sync', loadExistingStrokes);
-    
+
     loadExistingStrokes();
 
     return () => {
@@ -329,12 +329,12 @@ const Canvas = ({ roomCode }) => {
             ctx.lineWidth = pointData.width;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            
+
             ctx.beginPath();
             ctx.moveTo(pointData.point.x, pointData.point.y);
             ctx.lineTo(pointData.point.x, pointData.point.y);
             ctx.stroke();
-            
+
             ctx.restore();
           }
         });
@@ -398,9 +398,9 @@ const Canvas = ({ roomCode }) => {
       color: strokeColorRef.current,
       width: linewidthRef.current
     };
-    
+
     yStrokes.push([newStroke]);
-    
+
     return smoothedStroke;
   };
 
@@ -418,10 +418,10 @@ const Canvas = ({ roomCode }) => {
   const draw = (e) => {
     if (!isDrawing || useHandTracking) return;
     const point = getPointerPosition(e);
-    
+
     // Add point to current stroke locally
     setCurrentStroke(prev => [...prev, point]);
-    
+
     // Send point immediately to other clients
     yPoints.push([{
       id: crypto.randomUUID(),
@@ -434,46 +434,46 @@ const Canvas = ({ roomCode }) => {
 
   const compressStroke = (points) => {
     if (points.length <= 2) return points;
-    
+
     const tolerance = 2;
     const result = [points[0]];
-    
+
     for (let i = 1; i < points.length - 1; i++) {
       const prev = result[result.length - 1];
       const current = points[i];
       const next = points[i + 1];
-      
+
       const dx1 = current.x - prev.x;
       const dy1 = current.y - prev.y;
       const dx2 = next.x - current.x;
       const dy2 = next.y - current.y;
-      
+
       const angle1 = Math.atan2(dy1, dx1);
       const angle2 = Math.atan2(dy2, dx2);
       const angleDiff = Math.abs(angle1 - angle2);
-      
-      if (angleDiff > tolerance * 0.1 || 
+
+      if (angleDiff > tolerance * 0.1 ||
           Math.sqrt(dx1*dx1 + dy1*dy1) > tolerance * 5) {
         result.push(current);
       }
     }
-    
+
     result.push(points[points.length - 1]);
     return result;
   }
-  
+
   const endDrawing = () => {
     if (!isDrawing || useHandTracking) return;
     if (currentStrokeRef.current.length > 0) {
       const compressedStroke = compressStroke(currentStrokeRef.current);
       addStrokeToBackground(compressedStroke);
-      
+
       // Clear real-time points
       ydoc.transact(() => {
         yPoints.delete(0, yPoints.length);
       });
     }
-    
+
     setCurrentStroke([]);
     currentStrokeRef.current = [];
     setIsDrawing(false);
@@ -531,7 +531,7 @@ const Canvas = ({ roomCode }) => {
       if (currentStrokeRef.current.length > 0) {
         const prevPoint = currentStrokeRef.current[currentStrokeRef.current.length - 1];
         const distance = Math.sqrt(
-          Math.pow(prevPoint.x - smoothedPosition.x, 2) + 
+          Math.pow(prevPoint.x - smoothedPosition.x, 2) +
           Math.pow(prevPoint.y - smoothedPosition.y, 2)
         );
 
@@ -552,7 +552,7 @@ const Canvas = ({ roomCode }) => {
         const compressedStroke = compressStroke(currentStrokeRef.current);
         addStrokeToBackground(compressedStroke);
       }
-      
+
       setCurrentStroke([]);
       setIsDrawing(false);
     }
@@ -570,7 +570,7 @@ const Canvas = ({ roomCode }) => {
     ydoc.transact(() => {
       yStrokes.delete(0, yStrokes.length);
     });
-    
+
     const bgCtx = bgCanvasRef.current.getContext('2d');
     bgCtx.clearRect(0, 0, bgCanvasRef.current.width, bgCanvasRef.current.height);
     setCurrentStroke([]);
@@ -691,7 +691,7 @@ const Canvas = ({ roomCode }) => {
       />
 
       {useHandTracking && <HandTracking onHandUpdate={handleHandUpdate} />}
-      
+
       {textboxes.map((box, index) => (
         <div
           key={box.id}

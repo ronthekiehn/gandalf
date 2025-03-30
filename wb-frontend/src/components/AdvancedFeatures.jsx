@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useContext } from 'react';
 import { DarkModeContext } from '../contexts/DarkModeContext';
+import { Triangle, Moon, Sun } from 'lucide-react';
 
 const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
   const [chatMessages, setChatMessages] = useState([]);
@@ -264,36 +265,33 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
   };
 
   return (
-    <div className={`advanced-features p-4 ${darkMode ? 'bg-gray-800' : 'bg-gray-100'} rounded shadow-md`}>
-      <h2 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-black'}`}>
-        Advanced Features
-      </h2>
-
-      <div className="flex gap-2 mb-4">
-        <button
-          className={`px-4 py-2 rounded shadow ${
-            shapeRecognitionEnabled
-              ? 'bg-green-500 text-white hover:bg-green-600'
-              : 'bg-blue-500 text-white hover:bg-blue-600'
-          }`}
-          onClick={() => setShapeRecognitionEnabled(prev => !prev)}
-        >
-          Shape Recognition: {shapeRecognitionEnabled ? 'ON' : 'OFF'}
-        </button>
+    <>
 
         <button
-          className={`px-4 py-2 rounded shadow ${
-            darkMode
-              ? 'bg-yellow-500 text-black hover:bg-yellow-600'
-              : 'bg-gray-700 text-white hover:bg-gray-800'
-          }`}
+            className="text-white p-2 w-full rounded-full bg-blue-600 hover:-translate-y-0.5 transition-all duration-200 ease-in-out hover:shadow-lg cursor-pointer"
+            onClick={exportAsPNG}
+          >
+            Export as PNG
+          </button>
+
+
+      <div className='flex justify-around items-center'>
+      <button
+          className='cursor-pointer p-2 rounded  hover:bg-gray-100 transition-colors'
           onClick={() => setDarkMode(prev => !prev)}
         >
-          {darkMode ? '☀️ Light' : '🌙 Dark'}
+          {darkMode ? <Sun /> : <Moon />}
         </button>
-      </div>
-
       <button
+          className={`${shapeRecognitionEnabled ? 'bg-gray-200' : ''} cursor-pointer p-2 rounded hover:bg-gray-100 transition-colors`}
+          onClick={() => setShapeRecognitionEnabled(prev => !prev)}
+        >
+          <Triangle />
+        </button>
+        
+        </div>
+
+      {/* <button
         className="bg-green-500 text-white px-4 py-2 rounded shadow hover:bg-green-600 mb-2"
         onClick={() => setMiniMapVisible(!miniMapVisible)}
       >
@@ -308,9 +306,9 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
           height={200}
           style={{ border: '1px solid black', position: 'absolute', bottom: 10, right: 10 }}
         />
-      )}
+      )} */}
 
-      <div className={`chat-system ${darkMode ? 'bg-gray-700' : 'bg-white'} p-4 rounded shadow mb-4`}>
+      {/* <div className={`chat-system ${darkMode ? 'bg-gray-700' : 'bg-white'} p-4 rounded shadow mb-4`}>
         <h3 className={`font-bold mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>Chat</h3>
         <div className="chat-messages h-32 overflow-y-auto border p-2 rounded mb-2">
           {chatMessages.map((msg, index) => (
@@ -334,18 +332,12 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
             Send
           </button>
         </div>
-      </div>
+      </div> */}
 
-      <div className="export-import">
-        <h3 className={`font-bold mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>Export/Import</h3>
-        <div className="flex gap-2">
-          <button
-            className="bg-purple-500 text-white px-4 py-2 rounded shadow hover:bg-purple-600"
-            onClick={exportAsPNG}
-          >
-            Export as PNG
-          </button>
-          <label className="bg-gray-300 text-black px-4 py-2 rounded shadow hover:bg-gray-400 cursor-pointer">
+      
+
+       
+          {/* <label className="bg-gray-300 text-black px-4 py-2 rounded shadow hover:bg-gray-400 cursor-pointer">
             Import Image
             <input
               type="file"
@@ -353,10 +345,10 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
               onChange={importImage}
               className="hidden"
             />
-          </label>
-        </div>
-      </div>
-    </div>
+          </label> */}
+
+
+    </>
   );
 };
 

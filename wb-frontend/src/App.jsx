@@ -79,14 +79,14 @@ if (!roomCode) {
   return (
     <div className="min-h-screen w-full flex flex-col">
       <main className="grow flex flex-col items-center justify-center gap-10">
-        <h1 className="text-9xl font-bold mb-4">Gandalf</h1>
+        <h1 className="sm:text-9xl text-6xl font-bold mb-4">Gandalf</h1>
         <div className="relative bg-white px-4 py-6 rounded-xl shadow-md border border-stone-300 shadow-neutral-500 flex flex-col gap-4" >
 
       <div className="relative w-full min-w-[200px] shadow-xl max-w-xs h-14 bg-gray-100 rounded-full cursor-pointer border border-stone-300"
       onClick={() => setCreateMode(!createMode)}
     >
             <div
-              className={`absolute top-1 h-12 w-1/2 bg-white rounded-full shadow-md transition-all duration-300 ease-in-out ${
+              className={`absolute top-[3px] h-12 w-1/2 bg-white rounded-full shadow-md transition-all duration-300 ease-in-out ${
                 createMode ? "left-[calc(50%-2px)]" : "left-1"
               }`}
             />
@@ -110,7 +110,7 @@ if (!roomCode) {
           </div>
           {createMode ? (
               <button
-              className="bg-blue-600 text-white p-3 w-full rounded-full hover:-translate-y-0.5 transition-all duration-00 ease-in-out hover:shadow-lg cursor-pointer"
+              className="bg-blue-600 text-white p-3 w-full rounded-full hover:-translate-y-0.5 transition-all duration-200 ease-in-out hover:shadow-lg cursor-pointer"
               onClick={createRoom}
             >
               Create

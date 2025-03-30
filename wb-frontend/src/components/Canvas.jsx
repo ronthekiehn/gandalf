@@ -4,6 +4,7 @@ import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket';
 import AdvancedFeatures from './AdvancedFeatures';
 import { DarkModeContext } from '../contexts/DarkModeContext';
+import { X, Mouse, Hand, Type } from 'lucide-react';
 
 const Canvas = ({ roomCode }) => {
   const [userName, setUserName] = useState(() => {
@@ -698,23 +699,34 @@ const Canvas = ({ roomCode }) => {
 
   return (
     <DarkModeContext.Provider value={{ darkMode, setDarkMode }}>
-      <div className={`min-h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
-        <div className={`absolute top-15 right-4 flex flex-col gap-2 ${darkMode ? 'text-white' : 'text-black'}`}>
+      <div className={`min-h-screen w-full flex justify-center ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
+        <div className={`bg-white absolute bottom-4 px-3 py-2 flex gap-4 justify-between items-center shadow-lg rounded-2xl shadow-neutral-500 border border-stone-300 ${darkMode ? 'text-white' : 'text-black'}`}>
           <button
-            className="bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700"
+            className="cursor-pointer p-2 rounded-full hover:bg-gray-100 transition-colors"
             onClick={toggleHandTracking}
           >
-            {useHandTracking ? '✋ Hand Mode ON' : '🖱️ Mouse Mode'}
+            {useHandTracking ? <Hand /> : <Mouse />}
           </button>
 
-          <button
-            className="bg-red-600 text-white p-2 rounded-full shadow-lg hover:bg-red-700"
-            onClick={clearCanvas}
-          >
-            Clear
-          </button>
+          <div className="flex gap-2">
+            {colors.map((color, index) => (
+              <button
+                key={color}
+                className={` cursor-pointer w-6 h-6 rounded-full hover:opacity-80 ${
+                  index === currentColorIndex ? 'ring-2 ring-offset-2 ring-white' : ''
+                }`}
+                style={{ backgroundColor: color }}
+                onClick={() => {
+                  strokeColorRef.current = color;
+                  setCurrentColorIndex(index);
+                }}
+                aria-label={color}
+              />
+            ))}
+          </div>
+        
           <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
-            <label htmlFor="linewidth" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Line Width</label>
+            <label htmlFor="linewidth" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}></label>
             <input
               type="range"
               id="linewidth"
@@ -733,46 +745,42 @@ const Canvas = ({ roomCode }) => {
                   return prevCtx;
                 });
               }}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-black [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-black [&::-moz-range-thumb]:border [&::-moz-range-thumb]:cursor-pointer"
               style={{
                 background: `linear-gradient(to right, #000000 0%, #000000 ${((lineWidth - 2) / 8) * 100}%, #ccc ${((lineWidth - 2) / 8) * 100}%, #ccc 100%)`
               }}
             />
-            <span className="text-xs text-gray-500">{lineWidth}px</span>
-          </div>
-          <div className="flex gap-2">
-            {colors.map((color, index) => (
-              <button
-                key={color}
-                className={`w-10 h-10 rounded-full shadow-lg hover:opacity-80 ${
-                  index === currentColorIndex ? 'ring-2 ring-offset-2 ring-white' : ''
-                }`}
-                style={{ backgroundColor: color }}
-                onClick={() => {
-                  strokeColorRef.current = color;
-                  setCurrentColorIndex(index);
-                }}
-                aria-label={color}
-              />
-            ))}
           </div>
 
           <button
-            className="bg-purple-600 text-white p-2 rounded-full shadow-lg hover:bg-purple-700 flex items-center justify-center gap-2"
+            className="cursor-pointer aspect-square p-2 rounded-full hover:bg-gray-100 transition-colors gap-2"
             onClick={addTextbox}
           >
-            <span>📝</span> Add Text
+            <Type />
           </button>
-
+          
           <button
-            className="bg-green-600 text-white p-2 rounded-full shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"
-            onClick={generateImage}
-            disabled={isGenerating}
+            className="cursor-pointer text-red p-2 rounded-full text-red-500 hover:bg-gray-100 transition-colors"
+            onClick={clearCanvas}
           >
-            {isGenerating ? '⏳ Generating...' : '🎨 Generate Art'}
+            <X />
           </button>
-
-          <div className="mb-4">
+         
+        </div>
+        
+        <div className='fixed top-2 right-4 flex gap-2 items-center'>
+            {Array.from(awareness.getStates())
+              .filter(([_, state]) => state.user?.name && state.user?.color)
+              .map(([clientID, state]) => (
+                <p key={clientID} className="text-white text-sm flex justify-center items-center p-1 w-6 h-6 text-center rounded-full"
+                style={{ backgroundColor: state.user.color }}>
+                  {state.user.name.charAt(0)}
+                </p>
+              ))}
+          </div>
+        <div className={`absolute top-12 right-4 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-2 
+         bg-white px-4 py-6 rounded-xl shadow-sm border border-stone-300 shadow-neutral-500 flex flex-col gap-4`}>
+       
             <input
               type="text"
               value={userName}
@@ -781,26 +789,28 @@ const Canvas = ({ roomCode }) => {
                 setUserName(newName);
                 localStorage.setItem('wb-username', newName);
               }}
-              className="px-2 py-1 border rounded shadow-sm"
-              placeholder="Enter your name"
+              className="text-center p-2 border rounded shadow-sm"
+              placeholder="name"
             />
-          </div>
-        </div>
-        <div className={`absolute top-15 left-4 ${darkMode ? 'bg-gray-800/90' : 'bg-white/90'} p-2 rounded shadow-lg`}>
-          <h3 className={`font-bold mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>Connected Users:</h3>
-          <ul>
-            {Array.from(awareness.getStates())
-              .filter(([_, state]) => state.user?.name && state.user?.color)
-              .map(([clientID, state]) => (
-                <li key={clientID} className="flex items-center gap-2">
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: state.user.color }}
-                  />
-                  {state.user.name}
-                </li>
-              ))}
-          </ul>
+
+
+          <button
+            className="text-white p-2 w-full rounded-full bg-green-600 hover:-translate-y-0.5 transition-all duration-200 ease-in-out hover:shadow-lg cursor-pointer"
+            onClick={generateImage}
+            disabled={isGenerating}
+          >
+            {isGenerating ? '⏳ Generating...' : 'Improve Image ✨'}
+          </button>
+          
+          <AdvancedFeatures
+          canvasRef={canvasRef}
+          bgCanvasRef={bgCanvasRef}
+          ydoc={ydoc}
+          awareness={awareness}
+        />
+
+         
+          
         </div>
         <canvas
           ref={canvasRef}
@@ -866,12 +876,7 @@ const Canvas = ({ roomCode }) => {
           </div>
         )}
 
-        <AdvancedFeatures
-          canvasRef={canvasRef}
-          bgCanvasRef={bgCanvasRef}
-          ydoc={ydoc}
-          awareness={awareness}
-        />
+       
       </div>
 
       {generatedImages.length > 0 && (

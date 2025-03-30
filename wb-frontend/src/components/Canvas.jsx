@@ -21,7 +21,7 @@ const Canvas = ({ roomCode }) => {
 
   const [provider] = useState(() => {
       const ydoc = new Y.Doc();
-      const wsUrl = new URL('wss://ws.ronkiehn.dev');
+      const wsUrl = new URL('https://ws.ronkiehn.dev:1234'); // Change to your WebSocket server URL
       wsUrl.searchParams.set('username', userName);
       wsUrl.searchParams.set('room', roomCode);
       wsUrl.pathname = `/${roomCode}`;
@@ -70,7 +70,8 @@ const Canvas = ({ roomCode }) => {
   const cursorHistorySize = 2;
   const wasClickingRef = useRef(false);
   const [darkMode, setDarkMode] = useState(false);
-
+  const [generatedImages, setGeneratedImages] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
   const colors = ['black', 'red', 'blue', 'green'];
   const [currentColorIndex, setCurrentColorIndex] = useState(0);
 
@@ -329,6 +330,37 @@ const Canvas = ({ roomCode }) => {
     };
   }, [isResizing, selectedTextbox]);
 
+  useEffect(() => {
+    if (!provider?.ws) return;
+
+    const handleMessage = (event) => {
+      try {
+        // Skip binary messages
+        if (event.data instanceof ArrayBuffer) return;
+
+        const data = JSON.parse(event.data);
+        if (data.type === 'generatedImage') {
+          setGeneratedImages(prev => [
+            ...prev,
+            {
+              src: `data:${data.mimeType};base64,${data.data}`,
+              alt: 'AI enhanced artwork',
+              timestamp: Date.now()
+            }
+          ]);
+          setIsGenerating(false);
+        }
+      } catch (error) {
+        if (!(event.data instanceof ArrayBuffer)) {
+          console.error('Error handling WebSocket message:', error);
+        }
+      }
+    };
+
+    provider.ws.addEventListener('message', handleMessage);
+    return () => provider.ws.removeEventListener('message', handleMessage);
+  }, [provider]);
+  
   const addTextbox = () => {
     const centerX = canvasRef.current.width / 2;
     const centerY = canvasRef.current.height / 2;
@@ -580,6 +612,79 @@ const Canvas = ({ roomCode }) => {
     setCurrentStroke([]);
     setIsDrawing(false);
   };
+  
+  
+  const generateImage = async () => {
+    if (!canvasRef.current) return;
+    setIsGenerating(true);
+
+    try {
+      // Get all strokes
+      const allStrokes = yStrokes.toArray().map(stroke => {
+        const strokeData = Array.isArray(stroke) ? stroke[0] : stroke;
+        console.log('Processing stroke:', {
+          hasPoints: !!strokeData.points,
+          pointCount: strokeData.points?.length,
+          color: strokeData.color,
+          width: strokeData.width
+        });
+        return {
+          points: strokeData.points,
+          color: strokeData.color,
+          width: strokeData.width
+        };
+      });
+
+      console.log('Sending generation request:', {
+        strokeCount: allStrokes.length,
+        timestamp: new Date().toISOString()
+      });
+
+      const response = await fetch('https://ws.ronkiehn.dev:1234/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          strokes: allStrokes,
+          prompt: "Enhance and refine this sketch while maintaining its core elements and shapes.",
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Server error: ${errorData.error || response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Generation result:', {
+        success: true,
+        imageCount: result.images?.length,
+        hasText: !!result.text,
+        timestamp: new Date().toISOString()
+      });
+
+      if (result.images?.length) {
+        setGeneratedImages(prev => [
+          ...prev,
+          ...result.images.map(img => ({
+            src: `data:${img.mimeType};base64,${img.data}`,
+            alt: 'AI Generated artwork',
+            timestamp: Date.now()
+          }))
+        ]);
+      } else {
+        throw new Error('No images generated');
+      }
+    } catch (error) {
+      console.error('Generation failed:', {
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <DarkModeContext.Provider value={{ darkMode, setDarkMode }}>
@@ -647,6 +752,14 @@ const Canvas = ({ roomCode }) => {
             onClick={addTextbox}
           >
             <span>📝</span> Add Text
+          </button>
+
+          <button
+            className="bg-green-600 text-white p-2 rounded-full shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"
+            onClick={generateImage}
+            disabled={isGenerating}
+          >
+            {isGenerating ? '⏳ Generating...' : '🎨 Generate Art'}
           </button>
 
           <div className="mb-4">
@@ -750,6 +863,32 @@ const Canvas = ({ roomCode }) => {
           awareness={awareness}
         />
       </div>
+      
+      {generatedImages.length > 0 && (
+        <div className="fixed bottom-4 left-4 bg-white/95 p-4 rounded-lg shadow-lg max-w-[80vw]">
+          <h3 className="font-bold mb-2">Generated Images</h3>
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {generatedImages.map((img) => (
+              <div key={img.timestamp} className="relative group">
+                <img
+                  src={img.src}
+                  alt={img.alt}
+                  className="h-48 w-48 object-contain rounded-lg border-2 border-gray-200"
+                />
+                <a
+                  href={img.src}
+                  download={`generated-${img.timestamp}.png`}
+                  className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Download image"
+                >
+                  ⬇️
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
     </DarkModeContext.Provider>
   );
 };

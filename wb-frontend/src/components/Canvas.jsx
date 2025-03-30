@@ -28,6 +28,7 @@ const Canvas = () => {
 
   const ydoc = provider.doc;
   const yStrokes = ydoc.getArray('strokes');
+  const yPoints = ydoc.getArray('points');
   const awareness = provider.awareness;
 
   const canvasRef = useRef(null);
@@ -306,6 +307,35 @@ const Canvas = () => {
     };
   }, [isResizing, selectedTextbox]);
 
+  useEffect(() => {
+    if (!ctx) return;
+
+    const handlePointAdded = (event) => {
+      event.changes.added.forEach(item => {
+        const points = item.content.getContent();
+        points.forEach(pointData => {
+          if (pointData.userId !== ydoc.clientID) {
+            ctx.save();
+            ctx.strokeStyle = pointData.color;
+            ctx.lineWidth = pointData.width;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(pointData.point.x, pointData.point.y);
+            ctx.lineTo(pointData.point.x, pointData.point.y);
+            ctx.stroke();
+            
+            ctx.restore();
+          }
+        });
+      });
+    };
+
+    yPoints.observe(handlePointAdded);
+    return () => yPoints.unobserve(handlePointAdded);
+  }, [ctx, ydoc.clientID]);
+
   const addTextbox = () => {
     const centerX = canvasRef.current.width / 2;
     const centerY = canvasRef.current.height / 2;
@@ -379,7 +409,18 @@ const Canvas = () => {
   const draw = (e) => {
     if (!isDrawing || useHandTracking) return;
     const point = getPointerPosition(e);
+    
+    // Add point to current stroke locally
     setCurrentStroke(prev => [...prev, point]);
+    
+    // Send point immediately to other clients
+    yPoints.push([{
+      id: crypto.randomUUID(),
+      point,
+      color: strokeColorRef.current,
+      width: linewidthRef.current,
+      userId: ydoc.clientID
+    }]);
   };
 
   const compressStroke = (points) => {
@@ -417,6 +458,11 @@ const Canvas = () => {
     if (currentStrokeRef.current.length > 0) {
       const compressedStroke = compressStroke(currentStrokeRef.current);
       addStrokeToBackground(compressedStroke);
+      
+      // Clear real-time points
+      ydoc.transact(() => {
+        yPoints.delete(0, yPoints.length);
+      });
     }
     
     setCurrentStroke([]);
@@ -538,7 +584,8 @@ const Canvas = () => {
       >
         Clear
       </button>
-      <div className="slider-container">
+      <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
+        <label htmlFor="linewidth" className="text-sm text-gray-700">Line Width</label>
         <input
           type="range"
           id="linewidth"
@@ -557,10 +604,12 @@ const Canvas = () => {
               return prevCtx;
             });
           }}
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
           style={{
             background: `linear-gradient(to right, #000000 0%, #000000 ${lineWidth / 10 * 100}%, #ccc ${lineWidth / 10 * 100}%, #ccc 100%)`
           }}
         />
+        <span className="text-xs text-gray-500">{lineWidth}px</span>
       </div>
       <div className="flex gap-2">
         <button

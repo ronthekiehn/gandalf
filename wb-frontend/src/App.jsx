@@ -1,33 +1,72 @@
 import './App.css';
 import Canvas from './components/Canvas';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 
 const API = 'https://ws.ronkiehn.dev';
 
 function App() {
   const [roomCode, setRoomCode] = useState(null);
-
+  const { roomId } = useParams();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (roomId && !roomCode) {
+      checkAndJoinRoom(roomId);
+    }
+  }, [roomId]);
+  
+  const checkAndJoinRoom = async (code) => {
+    try {
+      const response = await fetch(`${API}/check-room?roomCode=${code}`, {
+        method: 'GET',
+      });
+      if (response.ok) {
+        const { exists } = await response.json();
+        if (exists) {
+          setRoomCode(code);
+        } else {
+          // Room doesn't exist, redirect to home
+          navigate('/', { replace: true });
+          alert('Invalid room code. Please try again.');
+        }
+      } else {
+        navigate('/', { replace: true });
+        alert('Error checking room code. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error checking room:', error);
+      navigate('/', { replace: true });
+    }
+  };
+  
   const createRoom = async () => {
-    const response = await fetch(`${API}/create-room`, {
-      method: 'GET',
-    });
-    const { roomCode } = await response.json();
-    setRoomCode(roomCode);
+    try {
+      const response = await fetch(`${API}/create-room`, {
+        method: 'GET',
+      });
+      const { roomCode } = await response.json();
+      setRoomCode(roomCode);
+      
+      // Update URL when creating a new room
+      navigate(`/${roomCode}`, { replace: true });
+    } catch (error) {
+      console.error('Error creating room:', error);
+      alert('Error creating room. Please try again.');
+    }
   };
 
   const joinRoom = async (code) => {
-    const response = await fetch(`${API}/check-room?roomCode=${code}`, {
-      method: 'GET',
-    });
-    if (response.ok) {
-      const { exists } = await response.json();
-      if (exists) {
-        setRoomCode(code);
-      } else {
-        alert('Invalid room code. Please try again.');
-      }
-    } else {
-      alert('Error checking room code. Please try again.');
+    if (!code || code.trim() === '') {
+      alert('Please enter a room code');
+      return;
+    }
+    
+    await checkAndJoinRoom(code);
+    
+    // Update URL when joining a room
+    if (roomCode) {
+      navigate(`/${code}`, { replace: true });
     }
   };
 

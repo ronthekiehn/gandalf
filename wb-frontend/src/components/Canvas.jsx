@@ -73,7 +73,7 @@ const Canvas = ({ roomCode }) => {
   const [darkMode, setDarkMode] = useState(false);
   const [generatedImages, setGeneratedImages] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const colors = ['black', 'red', 'blue', 'green'];
+  const [colors, setColors] = useState(['black', 'red', 'blue', 'green']);
   const [currentColorIndex, setCurrentColorIndex] = useState(0);
 
   const cycleColor = () => {
@@ -83,6 +83,25 @@ const Canvas = ({ roomCode }) => {
       return newIndex;
     });
   };
+
+  useEffect(() => {
+    if (darkMode) {
+      setColors(['white', 'red', 'blue', 'green']);
+
+      // If currently using black, switch to white
+      if (strokeColorRef.current === 'black') {
+        strokeColorRef.current = 'white';
+      }
+    } else {
+      setColors(['black', 'red', 'blue', 'green']);
+
+      // If currently using white, switch to black
+      if (strokeColorRef.current === 'white') {
+        strokeColorRef.current = 'black';
+      }
+    }
+  }, [darkMode]);
+
 
   useEffect(() => {
     bgCanvasRef.current = bgCanvas;
@@ -235,7 +254,7 @@ const Canvas = ({ roomCode }) => {
 
       targetCtx.save();
       targetCtx.strokeStyle = stroke.color || 'black';
-      targetCtx.lineWidth = stroke.width || ((strokeColorRef.current === 'white' || strokeColorRef.current==='#111827') ? linewidthRef.current * 10 : linewidthRef.current);
+      targetCtx.lineWidth = stroke.width || ((strokeColorRef.current === 'white' || strokeColorRef.current === '#111827') ? linewidthRef.current * 10 : linewidthRef.current);      ;
       targetCtx.beginPath();
       targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
 
@@ -289,7 +308,7 @@ const Canvas = ({ roomCode }) => {
         const tempStroke = {
           points: currentStroke,
           color: strokeColorRef.current,
-          width: ((strokeColorRef.current === 'white' || strokeColorRef.current==='#111827') ? linewidthRef.current * 10 : linewidthRef.current)
+          width: ((darkMode && strokeColorRef.current === '#111827') || (!darkMode && strokeColorRef.current === 'white') ? linewidthRef.current * 10 : linewidthRef.current)
         };
         renderStroke(tempStroke, ctx);
       }
@@ -487,7 +506,7 @@ const Canvas = ({ roomCode }) => {
       id: crypto.randomUUID(),
       points: smoothedStroke,
       color: strokeColorRef.current,
-      width: ((strokeColorRef.current === 'white' || strokeColorRef.current==='#111827') ? linewidthRef.current * 10 : linewidthRef.current)
+      width: ((darkMode && strokeColorRef.current === '#111827') || (!darkMode && strokeColorRef.current === 'white') ? linewidthRef.current * 10 : linewidthRef.current)
     };
 
     yStrokes.push([newStroke]);
@@ -553,7 +572,7 @@ const Canvas = ({ roomCode }) => {
         detail: {
           points: compressedStroke,
           color: strokeColorRef.current,
-          width: ((strokeColorRef.current === 'white' || strokeColorRef.current==='#111827') ? linewidthRef.current * 10 : linewidthRef.current)
+          width: ((darkMode && strokeColorRef.current === '#111827') || (!darkMode && strokeColorRef.current === 'white') ? linewidthRef.current * 10 : linewidthRef.current)
         }
       });
       canvasRef.current.dispatchEvent(strokeEndEvent);
@@ -809,7 +828,7 @@ const Canvas = ({ roomCode }) => {
           {/* Add Eraser Button */}
           <button
             className={`cursor-pointer w-6 h-6 rounded-full transition-all flex items-center justify-center ${
-              strokeColorRef.current === 'white' || strokeColorRef.current === '#111827'
+              (darkMode && strokeColorRef.current === '#111827') || (!darkMode && strokeColorRef.current === 'white')
                 ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
                 : 'opacity-60 hover:opacity-100'
             } ${darkMode

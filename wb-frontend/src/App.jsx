@@ -7,6 +7,8 @@ const API = 'https://ws.ronkiehn.dev';
 
 function App() {
   const [roomCode, setRoomCode] = useState(null);
+  const [createMode, setCreateMode] = useState(false);
+  const [error, setError] = useState(null);
   const { roomId } = useParams();
   const navigate = useNavigate();
   
@@ -28,14 +30,15 @@ function App() {
         } else {
           // Room doesn't exist, redirect to home
           navigate('/', { replace: true });
-          alert('Invalid room code. Please try again.');
+          setError('Invalid room code. Please try again.');
         }
       } else {
         navigate('/', { replace: true });
-        alert('Error checking room code. Please try again.');
+        setError('Error checking room code. Please try again.');
       }
     } catch (error) {
       console.error('Error checking room:', error);
+      setError('Error checking room. Please try again.');
       navigate('/', { replace: true });
     }
   };
@@ -52,7 +55,7 @@ function App() {
       navigate(`/${roomCode}`, { replace: true });
     } catch (error) {
       console.error('Error creating room:', error);
-      alert('Error creating room. Please try again.');
+      setError('Error creating room. Please try again.');
     }
   };
 
@@ -71,53 +74,81 @@ function App() {
   };
 
   // Room selection UI
-  if (!roomCode) {
-    return (
-      <div className="min-h-screen w-full flex flex-col">
-        <header className="bg-blue-600 text-white p-2 shadow-md">
-          <h1 className="text-xl font-bold">Interactive Whiteboard</h1>
-        </header>
-        <main className="grow flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <button
-              className="bg-blue-600 text-white p-2 rounded shadow-lg hover:bg-blue-700"
-              onClick={createRoom}
-            >
-              Create New Room
-            </button>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Enter Room Code"
-                className="border p-2 rounded"
-                onKeyPress={(e) => e.key === 'Enter' && joinRoom(e.target.value)}
-              />
-              <button
-                className="bg-green-600 text-white p-2 rounded shadow-lg hover:bg-green-700"
-                onClick={() => joinRoom(document.querySelector('input').value)}
-              >
-                Join Room
-              </button>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
+// Room selection UI
+if (!roomCode) {
   return (
     <div className="min-h-screen w-full flex flex-col">
-      <header className="bg-blue-600 text-white p-2 shadow-md">
-        <h1 className="text-xl font-bold">Interactive Whiteboard - Room: {roomCode}</h1>
-      </header>
-      
-      <main className="grow flex">
-        <div className="w-full h-full">
-          <Canvas roomCode={roomCode} />
+      <main className="grow flex flex-col items-center justify-center gap-10">
+        <h1 className="text-9xl font-bold mb-4">Gandalf</h1>
+        <div className="relative bg-white px-4 py-6 rounded-xl shadow-md border border-stone-300 shadow-neutral-500 flex flex-col gap-4" >
+
+      <div className="relative w-full min-w-[200px] shadow-xl max-w-xs h-14 bg-gray-100 rounded-full cursor-pointer border border-stone-300"
+      onClick={() => setCreateMode(!createMode)}
+    >
+            <div
+              className={`absolute top-1 h-12 w-1/2 bg-white rounded-full shadow-md transition-all duration-300 ease-in-out ${
+                createMode ? "left-[calc(50%-2px)]" : "left-1"
+              }`}
+            />
+
+            <div className="relative flex h-full">
+              <div
+                className={`flex-1 flex items-center justify-center text-lg z-10 transition-colors duration-300 ${
+                  !createMode ? "text-black" : "text-gray-400"
+                }`}
+              >
+                Join
+              </div>
+              <div
+                className={`flex-1 flex items-center justify-center text-lg z-10 transition-colors duration-300 ${
+                  createMode ? "text-black" : "text-gray-400"
+                }`}
+              >
+                Create
+              </div>
+            </div>
+          </div>
+          {createMode ? (
+              <button
+              className="bg-blue-600 text-white p-3 w-full rounded-full hover:-translate-y-0.5 transition-all duration-00 ease-in-out hover:shadow-lg cursor-pointer"
+              onClick={createRoom}
+            >
+              Create
+            </button>
+          ):
+          (
+            <input
+              type="text"
+              placeholder="room code"
+              className="bg-zinc-100 placeholder:text-stone-500 p-3 rounded-xl text-center "
+              onKeyPress={(e) => e.key === 'Enter' && joinRoom(e.target.value)}
+            />
+          )}
+         {error && (
+            <div className="absolute text-red-500 text-xs mt-2 -bottom-8 left-1/2 transform -translate-x-1/2 w-full text-center">
+              {error}
+            </div>
+          )}
         </div>
+             
       </main>
     </div>
   );
+}
+
+return (
+  <div className="min-h-screen w-full flex flex-col">
+    <header className="">
+      <h1 className="p-2 text-2xl font-bold">Gandalf<span className="text-neutral-400">.design/{roomCode}</span></h1>
+    </header>
+    
+    <main className="grow flex">
+      <div className="w-full h-full">
+        <Canvas roomCode={roomCode} />
+      </div>
+    </main>
+  </div>
+);
 }
 
 export default App;

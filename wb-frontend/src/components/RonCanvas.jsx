@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import HandTracking from './HandTracking';
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket';
-import AdvancedFeatures from './AdvancedFeatures';
-import { DarkModeContext } from '../contexts/DarkModeContext';
 
 const Canvas = ({ roomCode }) => {
   const [userName, setUserName] = useState(() => {
@@ -12,6 +10,7 @@ const Canvas = ({ roomCode }) => {
   });
 
   useEffect(() => {
+    // Clear anonymous usernames from localStorage
     const savedName = localStorage.getItem('wb-username');
     if (savedName && /^User-\d+$/.test(savedName)) {
       localStorage.removeItem('wb-username');
@@ -20,24 +19,25 @@ const Canvas = ({ roomCode }) => {
   }, []);
 
   const [provider] = useState(() => {
-      const ydoc = new Y.Doc();
-      const wsUrl = new URL('ws://ws.ronkiehn.dev:1234');
-      wsUrl.searchParams.set('username', userName);
-      wsUrl.searchParams.set('room', roomCode);
-      wsUrl.pathname = `/${roomCode}`;
-      console.log(`Connecting to room: ${roomCode}`);
-      
-      const provider = new WebsocketProvider(wsUrl.toString(), roomCode, ydoc);
-      
-      provider.on('status', (event) => {
-        console.log(`Room ${roomCode} - WebSocket status:`, event.status);
-      });
-      
-      return provider;
+    const ydoc = new Y.Doc();
+    const wsUrl = new URL('ws://ws.ronkiehn.dev:1234');
+    wsUrl.searchParams.set('username', userName);
+    wsUrl.searchParams.set('room', roomCode);
+    wsUrl.pathname = `/${roomCode}`;
+    console.log(`Connecting to room: ${roomCode}`);
+    
+    const provider = new WebsocketProvider(wsUrl.toString(), roomCode, ydoc);
+    
+    provider.on('status', (event) => {
+      console.log(`Room ${roomCode} - WebSocket status:`, event.status);
     });
+    
+    return provider;
+  });
 
   const ydoc = provider.doc;
   const yStrokes = ydoc.getArray('strokes');
+  const yPoints = ydoc.getArray('points');
   const awareness = provider.awareness;
 
   const canvasRef = useRef(null);
@@ -68,19 +68,6 @@ const Canvas = ({ roomCode }) => {
   const currentStrokeRef = useRef([]);
   const cursorHistoryRef = useRef([]);
   const cursorHistorySize = 2;
-  const wasClickingRef = useRef(false);
-  const [darkMode, setDarkMode] = useState(false);
-
-  const colors = ['black', 'red', 'blue', 'green'];
-  const [currentColorIndex, setCurrentColorIndex] = useState(0);
-
-  const cycleColor = () => {
-    setCurrentColorIndex(prevIndex => {
-      const newIndex = (prevIndex + 1) % colors.length;
-      strokeColorRef.current = colors[newIndex];
-      return newIndex;
-    });
-  };
 
   useEffect(() => {
     bgCanvasRef.current = bgCanvas;
@@ -123,10 +110,10 @@ const Canvas = ({ roomCode }) => {
     const resizeCanvas = () => {
       const width = window.innerWidth;
       const height = window.innerHeight - 70;
-
+      
       canvas.width = width;
       canvas.height = height;
-
+      
       bgCanvasRef.current.width = width;
       bgCanvasRef.current.height = height;
 
@@ -156,17 +143,17 @@ const Canvas = ({ roomCode }) => {
 
     const renderStroke = (stroke, targetCtx) => {
       if (!stroke || !stroke.points || stroke.points.length === 0) return;
-
+      
       targetCtx.save();
       targetCtx.strokeStyle = stroke.color || 'black';
       targetCtx.lineWidth = stroke.width || linewidthRef.current;
       targetCtx.beginPath();
       targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
-
+      
       for (let i = 1; i < stroke.points.length; i++) {
         targetCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
       }
-
+      
       targetCtx.stroke();
       targetCtx.restore();
     };
@@ -174,7 +161,7 @@ const Canvas = ({ roomCode }) => {
     const loadExistingStrokes = () => {
       const bgCtx = bgCanvasRef.current.getContext('2d');
       bgCtx.clearRect(0, 0, bgCtx.canvas.width, bgCtx.canvas.height);
-
+      
       yStrokes.forEach(item => {
         const stroke = Array.isArray(item) ? item[0] : item;
         renderStroke(stroke, bgCtx);
@@ -183,7 +170,7 @@ const Canvas = ({ roomCode }) => {
 
     const handleStrokeAdded = (event) => {
       const bgCtx = bgCanvasRef.current.getContext('2d');
-
+      
       event.changes.added.forEach(item => {
         let content;
         if (item.content && item.content.getContent) {
@@ -194,7 +181,7 @@ const Canvas = ({ roomCode }) => {
           console.warn("Unexpected content format:", item.content);
           return;
         }
-
+        
         for (let i = 0; i < content.length; i++) {
           const strokeData = content[i];
           const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
@@ -208,7 +195,7 @@ const Canvas = ({ roomCode }) => {
     const renderCanvas = () => {
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.drawImage(bgCanvasRef.current, 0, 0);
-
+      
       if (currentStroke.length > 0) {
         const tempStroke = {
           points: currentStroke,
@@ -221,19 +208,19 @@ const Canvas = ({ roomCode }) => {
       awareness.getStates().forEach((state, clientID) => {
         if (state.cursor && clientID !== ydoc.clientID) {
           ctx.save();
-
+          
           ctx.fillStyle = state.isDrawing ? state.user.color : 'gray';
           ctx.beginPath();
           ctx.arc(state.cursor.x, state.cursor.y, 10, 0, 2 * Math.PI);
           ctx.fill();
-
+          
           ctx.font = '14px Arial';
           ctx.fillStyle = 'white';
           ctx.strokeStyle = 'black';
           ctx.lineWidth = 3;
           ctx.strokeText(state.user.name, state.cursor.x + 15, state.cursor.y + 15);
           ctx.fillText(state.user.name, state.cursor.x + 15, state.cursor.y + 15);
-
+          
           ctx.restore();
         }
       });
@@ -255,7 +242,7 @@ const Canvas = ({ roomCode }) => {
 
     yStrokes.observe(handleStrokeAdded);
     provider.on('sync', loadExistingStrokes);
-
+    
     loadExistingStrokes();
 
     return () => {
@@ -329,6 +316,35 @@ const Canvas = ({ roomCode }) => {
     };
   }, [isResizing, selectedTextbox]);
 
+  useEffect(() => {
+    if (!ctx) return;
+
+    const handlePointAdded = (event) => {
+      event.changes.added.forEach(item => {
+        const points = item.content.getContent();
+        points.forEach(pointData => {
+          if (pointData.userId !== ydoc.clientID) {
+            ctx.save();
+            ctx.strokeStyle = pointData.color;
+            ctx.lineWidth = pointData.width;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(pointData.point.x, pointData.point.y);
+            ctx.lineTo(pointData.point.x, pointData.point.y);
+            ctx.stroke();
+            
+            ctx.restore();
+          }
+        });
+      });
+    };
+
+    yPoints.observe(handlePointAdded);
+    return () => yPoints.unobserve(handlePointAdded);
+  }, [ctx, ydoc.clientID]);
+
   const addTextbox = () => {
     const centerX = canvasRef.current.width / 2;
     const centerY = canvasRef.current.height / 2;
@@ -382,9 +398,9 @@ const Canvas = ({ roomCode }) => {
       color: strokeColorRef.current,
       width: linewidthRef.current
     };
-
+    
     yStrokes.push([newStroke]);
-
+    
     return smoothedStroke;
   };
 
@@ -402,55 +418,62 @@ const Canvas = ({ roomCode }) => {
   const draw = (e) => {
     if (!isDrawing || useHandTracking) return;
     const point = getPointerPosition(e);
+    
+    // Add point to current stroke locally
     setCurrentStroke(prev => [...prev, point]);
+    
+    // Send point immediately to other clients
+    yPoints.push([{
+      id: crypto.randomUUID(),
+      point,
+      color: strokeColorRef.current,
+      width: linewidthRef.current,
+      userId: ydoc.clientID
+    }]);
   };
 
   const compressStroke = (points) => {
     if (points.length <= 2) return points;
-
+    
     const tolerance = 2;
     const result = [points[0]];
-
+    
     for (let i = 1; i < points.length - 1; i++) {
       const prev = result[result.length - 1];
       const current = points[i];
       const next = points[i + 1];
-
+      
       const dx1 = current.x - prev.x;
       const dy1 = current.y - prev.y;
       const dx2 = next.x - current.x;
       const dy2 = next.y - current.y;
-
+      
       const angle1 = Math.atan2(dy1, dx1);
       const angle2 = Math.atan2(dy2, dx2);
       const angleDiff = Math.abs(angle1 - angle2);
-
-      if (angleDiff > tolerance * 0.1 ||
+      
+      if (angleDiff > tolerance * 0.1 || 
           Math.sqrt(dx1*dx1 + dy1*dy1) > tolerance * 5) {
         result.push(current);
       }
     }
-
+    
     result.push(points[points.length - 1]);
     return result;
   }
-
+  
   const endDrawing = () => {
     if (!isDrawing || useHandTracking) return;
     if (currentStrokeRef.current.length > 0) {
       const compressedStroke = compressStroke(currentStrokeRef.current);
-      // First add stroke to background
       addStrokeToBackground(compressedStroke);
-      // Then emit the stroke data as a custom event
-      const strokeEndEvent = new CustomEvent('strokeEnd', {
-        detail: {
-          points: compressedStroke,
-          color: strokeColorRef.current,
-          width: linewidthRef.current
-        }
+      
+      // Clear real-time points
+      ydoc.transact(() => {
+        yPoints.delete(0, yPoints.length);
       });
-      canvasRef.current.dispatchEvent(strokeEndEvent);
     }
+    
     setCurrentStroke([]);
     currentStrokeRef.current = [];
     setIsDrawing(false);
@@ -495,24 +518,8 @@ const Canvas = ({ roomCode }) => {
     setShowCursor(true);
 
     const isPinching = handData.isPinching;
-    const isFist = handData.isFist;
-    const isClicking = handData.isClicking;
     const wasPinching = prevPinchState.current;
-    const wasClicking = wasClickingRef.current;
 
-    // Handle fist gesture for clearing canvas
-    if (isFist) {
-      clearCanvas();
-      return;
-    }
-
-    // Only cycle color when click gesture ends
-    if (!isClicking && wasClicking) {
-      cycleColor();
-    }
-    wasClickingRef.current = isClicking;
-
-    // Handle drawing with pinch gesture
     if (isPinching && !wasPinching) {
       setIsDrawing(true);
       setCurrentStroke([smoothedPosition]);
@@ -524,7 +531,7 @@ const Canvas = ({ roomCode }) => {
       if (currentStrokeRef.current.length > 0) {
         const prevPoint = currentStrokeRef.current[currentStrokeRef.current.length - 1];
         const distance = Math.sqrt(
-          Math.pow(prevPoint.x - smoothedPosition.x, 2) +
+          Math.pow(prevPoint.x - smoothedPosition.x, 2) + 
           Math.pow(prevPoint.y - smoothedPosition.y, 2)
         );
 
@@ -544,22 +551,11 @@ const Canvas = ({ roomCode }) => {
       if (currentStrokeRef.current.length > 0) {
         const compressedStroke = compressStroke(currentStrokeRef.current);
         addStrokeToBackground(compressedStroke);
-
-        // Emit stroke end event for hand-drawn strokes
-        const strokeEndEvent = new CustomEvent('strokeEnd', {
-          detail: {
-            points: compressedStroke,
-            color: strokeColorRef.current,
-            width: linewidthRef.current
-          }
-        });
-        canvasRef.current.dispatchEvent(strokeEndEvent);
       }
-
+      
       setCurrentStroke([]);
       setIsDrawing(false);
     }
-
     prevPinchState.current = isPinching;
   };
 
@@ -574,7 +570,7 @@ const Canvas = ({ roomCode }) => {
     ydoc.transact(() => {
       yStrokes.delete(0, yStrokes.length);
     });
-
+    
     const bgCtx = bgCanvasRef.current.getContext('2d');
     bgCtx.clearRect(0, 0, bgCanvasRef.current.width, bgCanvasRef.current.height);
     setCurrentStroke([]);
@@ -582,175 +578,170 @@ const Canvas = ({ roomCode }) => {
   };
 
   return (
-    <DarkModeContext.Provider value={{ darkMode, setDarkMode }}>
-      <div className={`min-h-screen w-full ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
-        <div className={`absolute top-15 right-4 flex flex-col gap-2 ${darkMode ? 'text-white' : 'text-black'}`}>
-          <button
-            className="bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700"
-            onClick={toggleHandTracking}
-          >
-            {useHandTracking ? '✋ Hand Mode ON' : '🖱️ Mouse Mode'}
-          </button>
+    <>
+    <div className="absolute top-15 right-4 flex flex-col gap-2">
+      <button
+        className="bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700"
+        onClick={toggleHandTracking}
+      >
+        {useHandTracking ? '✋ Hand Mode ON' : '🖱️ Mouse Mode'}
+      </button>
 
-          <button
-            className="bg-red-600 text-white p-2 rounded-full shadow-lg hover:bg-red-700"
-            onClick={clearCanvas}
-          >
-            Clear
-          </button>
-          <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
-            <label htmlFor="linewidth" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Line Width</label>
-            <input
-              type="range"
-              id="linewidth"
-              name="linewidth"
-              min="2"
-              max="10"
-              value={lineWidth}
-              onChange={(e) => {
-                const newWidth = Math.max(2, Math.min(10, parseInt(e.target.value)));
-                linewidthRef.current = newWidth;
-                setLineWidth(newWidth);
-                setCtx((prevCtx) => {
-                  if (prevCtx) {
-                    prevCtx.lineWidth = newWidth;
-                  }
-                  return prevCtx;
-                });
-              }}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-black [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
-              style={{
-                background: `linear-gradient(to right, #000000 0%, #000000 ${((lineWidth - 2) / 8) * 100}%, #ccc ${((lineWidth - 2) / 8) * 100}%, #ccc 100%)`
-              }}
-            />
-            <span className="text-xs text-gray-500">{lineWidth}px</span>
-          </div>
-          <div className="flex gap-2">
-            {colors.map((color, index) => (
-              <button
-                key={color}
-                className={`w-10 h-10 rounded-full shadow-lg hover:opacity-80 ${
-                  index === currentColorIndex ? 'ring-2 ring-offset-2 ring-white' : ''
-                }`}
-                style={{ backgroundColor: color }}
-                onClick={() => {
-                  strokeColorRef.current = color;
-                  setCurrentColorIndex(index);
-                }}
-                aria-label={color}
-              />
-            ))}
-          </div>
-
-          <button
-            className="bg-purple-600 text-white p-2 rounded-full shadow-lg hover:bg-purple-700 flex items-center justify-center gap-2"
-            onClick={addTextbox}
-          >
-            <span>📝</span> Add Text
-          </button>
-
-          <div className="mb-4">
-            <input
-              type="text"
-              value={userName}
-              onChange={(e) => {
-                const newName = e.target.value;
-                setUserName(newName);
-                localStorage.setItem('wb-username', newName);
-              }}
-              className="px-2 py-1 border rounded shadow-sm"
-              placeholder="Enter your name"
-            />
-          </div>
-        </div>
-        <div className={`absolute top-15 left-4 ${darkMode ? 'bg-gray-800/90' : 'bg-white/90'} p-2 rounded shadow-lg`}>
-          <h3 className={`font-bold mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>Connected Users:</h3>
-          <ul>
-            {Array.from(awareness.getStates())
-              .filter(([_, state]) => state.user?.name && state.user?.color)
-              .map(([clientID, state]) => (
-                <li key={clientID} className="flex items-center gap-2">
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: state.user.color }}
-                  />
-                  {state.user.name}
-                </li>
-              ))}
-          </ul>
-        </div>
-        <canvas
-          ref={canvasRef}
-          className={`w-full h-full ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={endDrawing}
-          onMouseLeave={endDrawing}
-          onTouchStart={startDrawing}
-          onTouchMove={draw}
-          onTouchEnd={endDrawing}
+      <button
+        className="bg-red-600 text-white p-2 rounded-full shadow-lg hover:bg-red-700"
+        onClick={clearCanvas}
+      >
+        Clear
+      </button>
+      <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
+        <label htmlFor="linewidth" className="text-sm text-gray-700">Line Width</label>
+        <input
+          type="range"
+          id="linewidth"
+          name="linewidth"
+          min="2"
+          max="10"
+          value={lineWidth}
+          onChange={(e) => {
+            const newWidth = Math.max(2, Math.min(10, parseInt(e.target.value)));
+            linewidthRef.current = newWidth;
+            setLineWidth(newWidth);
+            setCtx((prevCtx) => {
+              if (prevCtx) {
+                prevCtx.lineWidth = newWidth;
+              }
+              return prevCtx;
+            });
+          }}
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+          style={{
+            background: `linear-gradient(to right, #000000 0%, #000000 ${lineWidth / 10 * 100}%, #ccc ${lineWidth / 10 * 100}%, #ccc 100%)`
+          }}
         />
-
-        {useHandTracking && <HandTracking onHandUpdate={handleHandUpdate} />}
-
-        {textboxes.map((box, index) => (
-          <div
-            key={box.id}
-            className={`absolute pointer-events-auto group`}
-            style={{
-              left: box.x,
-              top: box.y,
-              width: box.width || '200px',
-              height: box.height || '40px',
-              position: 'absolute'
-            }}
-            onClick={(e) => handleTextboxClick(e, index)}
-            onMouseDown={(e) => handleTextboxDragStart(e, index)}
-          >
-            <button
-              className="w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity absolute -top-3 -right-3"
-              onClick={() => deleteTextbox(index)}
-            >
-              ×
-            </button>
-            <div
-              className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{
-                background: 'linear-gradient(135deg, transparent 50%, #4B5563 50%)'
-              }}
-              onMouseDown={(e) => handleResizeStart(e, index)}
-            />
-            <textarea
-              value={box.text}
-              onChange={(e) => {
-                setTextboxes(boxes =>
-                  boxes.map((b, i) =>
-                    i === index ? { ...b, text: e.target.value } : b
-                  )
-                );
-              }}
-              className="w-full h-full p-2 bg-white/90 border rounded-xl resize-none focus:outline-none"
-              placeholder="Type here..."
-              style={{ color: box.color }}
-              onClick={e => e.stopPropagation()}
-            />
-          </div>
-        ))}
-
-        {useHandTracking && !isHandReady && (
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white p-4 rounded-md z-50">
-            <p className="text-center">Please allow camera access and wait for the hand tracking model to load...</p>
-          </div>
-        )}
-
-        <AdvancedFeatures
-          canvasRef={canvasRef}
-          bgCanvasRef={bgCanvasRef}
-          ydoc={ydoc}
-          awareness={awareness}
+        <span className="text-xs text-gray-500">{lineWidth}px</span>
+      </div>
+      <div className="flex gap-2">
+        <button
+          className="w-10 h-10 rounded-full bg-black shadow-lg hover:opacity-80"
+          onClick={() => (strokeColorRef.current = 'black')}
+          aria-label="Black"
+        ></button>
+        <button
+          className="w-10 h-10 rounded-full bg-red-600 shadow-lg hover:opacity-80"
+          onClick={() => (strokeColorRef.current = 'red')}
+          aria-label="Red"
+        ></button>
+        <button
+          className="w-10 h-10 rounded-full bg-blue-600 shadow-lg hover:opacity-80"
+          onClick={() => (strokeColorRef.current = 'blue')}
+          aria-label="Blue"
+        />
+        <button
+          className="w-10 h-10 rounded-full bg-green-600 shadow-lg hover:opacity-80"
+          onClick={() => (strokeColorRef.current = 'green')}
+          aria-label="Green"
         />
       </div>
-    </DarkModeContext.Provider>
+
+      <button
+        className="bg-purple-600 text-white p-2 rounded-full shadow-lg hover:bg-purple-700 flex items-center justify-center gap-2"
+        onClick={addTextbox}
+      >
+        <span>📝</span> Add Text
+      </button>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          value={userName}
+          onChange={(e) => {
+            const newName = e.target.value;
+            setUserName(newName);
+            localStorage.setItem('wb-username', newName);
+          }}
+          className="px-2 py-1 border rounded shadow-sm"
+          placeholder="Enter your name"
+        />
+      </div>
+    </div>
+    <div className="absolute top-15 left-4 bg-white/90 p-2 rounded shadow-lg">
+      <h3 className="font-bold mb-2">Connected Users:</h3>
+      <ul>
+        {Array.from(awareness.getStates()).map(([clientID, state]) => (
+          <li key={clientID} className="flex items-center gap-2">
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: state.user?.color}}
+            />
+            {state.user?.name}
+          </li>
+        ))}
+      </ul>
+    </div>
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full bg-white"
+        onMouseDown={startDrawing}
+        onMouseMove={draw}
+        onMouseUp={endDrawing}
+        onMouseLeave={endDrawing}
+        onTouchStart={startDrawing}
+        onTouchMove={draw}
+        onTouchEnd={endDrawing}
+      />
+
+      {useHandTracking && <HandTracking onHandUpdate={handleHandUpdate} />}
+      
+      {textboxes.map((box, index) => (
+        <div
+          key={box.id}
+          className={`absolute pointer-events-auto group`}
+          style={{
+            left: box.x,
+            top: box.y,
+            width: box.width || '200px',
+            height: box.height || '40px',
+            position: 'absolute'
+          }}
+          onClick={(e) => handleTextboxClick(e, index)}
+          onMouseDown={(e) => handleTextboxDragStart(e, index)}
+        >
+          <button
+            className="w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity absolute -top-3 -right-3"
+            onClick={() => deleteTextbox(index)}
+          >
+            ×
+          </button>
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{
+              background: 'linear-gradient(135deg, transparent 50%, #4B5563 50%)'
+            }}
+            onMouseDown={(e) => handleResizeStart(e, index)}
+          />
+          <textarea
+            value={box.text}
+            onChange={(e) => {
+              setTextboxes(boxes =>
+                boxes.map((b, i) =>
+                  i === index ? { ...b, text: e.target.value } : b
+                )
+              );
+            }}
+            className="w-full h-full p-2 bg-white/90 border rounded-xl resize-none focus:outline-none"
+            placeholder="Type here..."
+            style={{ color: box.color }}
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      ))}
+
+      {useHandTracking && !isHandReady && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white p-4 rounded-md z-50">
+          <p className="text-center">Please allow camera access and wait for the hand tracking model to load...</p>
+        </div>
+      )}
+    </>
   );
 };
 

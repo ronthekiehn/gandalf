@@ -26,13 +26,13 @@ const Canvas = ({ roomCode }) => {
       wsUrl.searchParams.set('room', roomCode);
       wsUrl.pathname = `/${roomCode}`;
       console.log(`Connecting to room: ${roomCode}`);
-      
+
       const provider = new WebsocketProvider(wsUrl.toString(), roomCode, ydoc);
-      
+
       provider.on('status', (event) => {
         console.log(`Room ${roomCode} - WebSocket status:`, event.status);
       });
-      
+
       return provider;
     });
 
@@ -360,7 +360,7 @@ const Canvas = ({ roomCode }) => {
     provider.ws.addEventListener('message', handleMessage);
     return () => provider.ws.removeEventListener('message', handleMessage);
   }, [provider]);
-  
+
   const addTextbox = () => {
     const centerX = canvasRef.current.width / 2;
     const centerY = canvasRef.current.height / 2;
@@ -528,7 +528,8 @@ const Canvas = ({ roomCode }) => {
 
     const isPinching = handData.isPinching;
     const isFist = handData.isFist;
-    const isClicking = handData.isClicking;
+    const isClicking = handData.isClicking;  // From thumb-ring
+    const isGen = handData.isGen;            // From thumb-pinky
     const wasPinching = prevPinchState.current;
     const wasClicking = wasClickingRef.current;
 
@@ -538,11 +539,16 @@ const Canvas = ({ roomCode }) => {
       return;
     }
 
-    // Only cycle color when click gesture ends
+    // Handle color cycling with thumb-ring
     if (!isClicking && wasClicking) {
       cycleColor();
     }
     wasClickingRef.current = isClicking;
+
+    // Handle generation with thumb-pinky
+    if (isGen && !isGenerating) {
+      generateImage();
+    }
 
     // Handle drawing with pinch gesture
     if (isPinching && !wasPinching) {
@@ -612,8 +618,8 @@ const Canvas = ({ roomCode }) => {
     setCurrentStroke([]);
     setIsDrawing(false);
   };
-  
-  
+
+
   const generateImage = async () => {
     if (!canvasRef.current) return;
     setIsGenerating(true);
@@ -684,6 +690,10 @@ const Canvas = ({ roomCode }) => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const deleteGeneratedImage = (timestamp) => {
+    setGeneratedImages(prev => prev.filter(img => img.timestamp !== timestamp));
   };
 
   return (
@@ -863,13 +873,20 @@ const Canvas = ({ roomCode }) => {
           awareness={awareness}
         />
       </div>
-      
+
       {generatedImages.length > 0 && (
         <div className="fixed bottom-4 left-4 bg-white/95 p-4 rounded-lg shadow-lg max-w-[80vw]">
           <h3 className="font-bold mb-2">Generated Images</h3>
           <div className="flex gap-4 overflow-x-auto pb-2">
             {generatedImages.map((img) => (
               <div key={img.timestamp} className="relative group">
+                <button
+                  onClick={() => deleteGeneratedImage(img.timestamp)}
+                  className="absolute top-2 left-2 bg-red-500 text-white w-6 h-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600"
+                  title="Delete image"
+                >
+                  ×
+                </button>
                 <img
                   src={img.src}
                   alt={img.alt}
@@ -888,7 +905,7 @@ const Canvas = ({ roomCode }) => {
           </div>
         </div>
       )}
-      
+
     </DarkModeContext.Provider>
   );
 };

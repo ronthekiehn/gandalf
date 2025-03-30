@@ -7,19 +7,20 @@ const HandTracking = ({ onHandUpdate }) => {
   const [isLoading, setIsLoading] = useState(true);
   const requestRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
+  const fistStartTimeRef = useRef(null);
+  const pinkyStartTimeRef = useRef(null);
+  const FIST_CLEAR_DELAY = 500; // 0.5 seconds in milliseconds
+  const PINKY_CLEAR_DELAY = 1000; // 2 seconds in milliseconds
 
-  // Initialize the HandLandmarker
   useEffect(() => {
     async function initializeHandLandmarker() {
       try {
         setIsLoading(true);
 
-        // Create a vision tasks model
         const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
         );
 
-        // Initialize hand landmarker
         handLandmarkerRef.current = await HandLandmarker.createFromOptions(vision, {
           baseOptions: {
             modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
@@ -46,14 +47,13 @@ const HandTracking = ({ onHandUpdate }) => {
     };
   }, []);
 
-  // Setup webcam
   useEffect(() => {
     if (isLoading || !handLandmarkerRef.current) return;
 
     async function setupWebcam() {
-      if (!videoRef.current) return;
-
       try {
+        if (!videoRef.current) return;
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: 640,
@@ -83,19 +83,16 @@ const HandTracking = ({ onHandUpdate }) => {
   const detectHands = async () => {
     if (!videoRef.current || !handLandmarkerRef.current) return;
 
-    // Only detect if we have a new video frame
     if (lastVideoTimeRef.current !== videoRef.current.currentTime) {
       lastVideoTimeRef.current = videoRef.current.currentTime;
 
+      const startTimeMs = performance.now();
       try {
-        const startTimeMs = performance.now();
         const results = handLandmarkerRef.current.detectForVideo(videoRef.current, startTimeMs);
 
         if (results.landmarks && results.landmarks.length > 0) {
           const landmarks = results.landmarks[0];
           const handedness = results.handednesses[0][0];
-
-          // Get hand landmarks
           const indexTip = landmarks[8];
           const thumbTip = landmarks[4];
           const pinkyTip = landmarks[20];
@@ -104,7 +101,6 @@ const HandTracking = ({ onHandUpdate }) => {
           const wrist = landmarks[0];
 
           if (indexTip && thumbTip && wrist && pinkyTip && ringTip && middleTip) {
-            // Calculate distances for different gestures
             const pinch_distance = Math.sqrt(
               Math.pow(indexTip.x - thumbTip.x, 2) +
               Math.pow(indexTip.y - thumbTip.y, 2) +
@@ -114,38 +110,64 @@ const HandTracking = ({ onHandUpdate }) => {
             const fist_distance = Math.sqrt(
               Math.pow(indexTip.x - wrist.x, 2) +
               Math.pow(indexTip.y - wrist.y, 2) +
-              Math.pow(indexTip.z - wrist.z, 2) +
-              Math.pow(pinkyTip.x - wrist.x, 2) +
-              Math.pow(pinkyTip.y - wrist.y, 2) +
-              Math.pow(pinkyTip.z - wrist.z, 2) +
-              Math.pow(ringTip.x - wrist.x, 2) +
-              Math.pow(ringTip.y - wrist.y, 2) +
-              Math.pow(ringTip.z - wrist.z, 2) +
-              Math.pow(middleTip.x - wrist.x, 2) +
-              Math.pow(middleTip.y - wrist.y, 2) +
-              Math.pow(middleTip.z - wrist.z, 2)
+              Math.pow(indexTip.z - wrist.z, 2)
             );
 
-            const ring_thumb_distance = Math.sqrt(
+            const thumb_ring_distance = Math.sqrt(
               Math.pow(thumbTip.x - ringTip.x, 2) +
               Math.pow(thumbTip.y - ringTip.y, 2) +
               Math.pow(thumbTip.z - ringTip.z, 2)
             );
 
-            const isClicking = ring_thumb_distance < 0.08;
+            const thumb_pinky_distance = Math.sqrt(
+              Math.pow(thumbTip.x - pinkyTip.x, 2) +
+              Math.pow(thumbTip.y - pinkyTip.y, 2) +
+              Math.pow(thumbTip.z - pinkyTip.z, 2)
+            );
 
-            // Update parent component with all gesture states
+            const isFistNow = fist_distance < 0.3;
+            const isPinkyThumbNow = thumb_pinky_distance < 0.08;
+
+            // Handle fist gesture timing
+            if (isFistNow && !fistStartTimeRef.current) {
+              fistStartTimeRef.current = Date.now();
+            } else if (!isFistNow && fistStartTimeRef.current) {
+              fistStartTimeRef.current = null;
+            }
+
+            // Handle pinky gesture timing
+            if (isPinkyThumbNow && !pinkyStartTimeRef.current) {
+              pinkyStartTimeRef.current = Date.now();
+            } else if (!isPinkyThumbNow && pinkyStartTimeRef.current) {
+              pinkyStartTimeRef.current = null;
+            }
+
+            const shouldClear = fistStartTimeRef.current &&
+              (Date.now() - fistStartTimeRef.current >= FIST_CLEAR_DELAY);
+
+            const shouldGenerate = pinkyStartTimeRef.current &&
+              (Date.now() - pinkyStartTimeRef.current >= PINKY_CLEAR_DELAY);
+
             onHandUpdate({
               position: {
                 x: indexTip.x * videoRef.current.videoWidth,
                 y: indexTip.y * videoRef.current.videoHeight
               },
               isPinching: pinch_distance < 0.08,
-              isFist: fist_distance < 0.5,
-              isClicking: isClicking,
+              isFist: shouldClear,
+              isClicking: thumb_ring_distance < 0.08,
+              isGen: shouldGenerate,
               landmarks: landmarks,
               handedness: handedness.categoryName
             });
+
+            // Reset timers after triggering
+            if (shouldClear) {
+              fistStartTimeRef.current = null;
+            }
+            if (shouldGenerate) {
+              pinkyStartTimeRef.current = null;
+            }
           }
         }
       } catch (error) {

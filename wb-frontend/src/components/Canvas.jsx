@@ -35,6 +35,10 @@ const Canvas = () => {
   const currentStrokeRef = useRef([]);
   const cursorHistoryRef = useRef([]);
   const cursorHistorySize = 2;
+  const [userName, setUserName] = useState(() => {
+    const savedName = localStorage.getItem('wb-username');
+    return savedName || `User-${Math.floor(Math.random() * 1000)}`;
+  });
 
   useEffect(() => {
     bgCanvasRef.current = bgCanvas;
@@ -46,13 +50,21 @@ const Canvas = () => {
         awareness.setLocalState({
           cursor: cursorPosition,
           isDrawing,
-          user: crypto.randomUUID()
+          user: {
+            id: ydoc.clientID,
+            name: userName,
+            color: strokeColorRef.current
+          }
         });
       } else {
         awareness.setLocalState({
           cursor: { x: MouseEvent.x || cursorPosition.x, y: MouseEvent.y || cursorPosition.y },
           isDrawing,
-          user: crypto.randomUUID()
+          user: {
+            id: ydoc.clientID,
+            name: userName,
+            color: strokeColorRef.current
+          }
         });
       }
     };
@@ -61,7 +73,7 @@ const Canvas = () => {
     return () => {
       awareness.setLocalState(null);
     };
-  }, [awareness, cursorPosition, isHandReady, useHandTracking, isDrawing]);
+  }, [awareness, cursorPosition, isHandReady, useHandTracking, isDrawing, userName]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -98,138 +110,133 @@ const Canvas = () => {
     currentStrokeRef.current = currentStroke;
   }, [currentStroke]);
 
-  // Add this effect to handle both drawing and synchronization
-useEffect(() => {
-  if (!ctx || !bgCanvasRef.current) return;
+  useEffect(() => {
+    if (!ctx || !bgCanvasRef.current) return;
 
-  // Drawing function that works for both local and remote strokes
-  const renderStroke = (stroke, targetCtx) => {
-    if (!stroke || !stroke.points || stroke.points.length === 0) return;
-    
-    targetCtx.save();
-    targetCtx.strokeStyle = stroke.color || 'black';
-    targetCtx.lineWidth = stroke.width || linewidthRef.current;
-    targetCtx.beginPath();
-    targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
-    
-    for (let i = 1; i < stroke.points.length; i++) {
-      targetCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
-    }
-    
-    targetCtx.stroke();
-    targetCtx.restore();
-  };
-
-  // Load existing strokes from Yjs (happens once on connect)
-  const loadExistingStrokes = () => {
-    const bgCtx = bgCanvasRef.current.getContext('2d');
-    bgCtx.clearRect(0, 0, bgCtx.canvas.width, bgCtx.canvas.height);
-    
-    yStrokes.forEach(item => {
-      const stroke = Array.isArray(item) ? item[0] : item;
-      renderStroke(stroke, bgCtx);
-    });
-  };
-
-  const handleStrokeAdded = (event) => {
-    const bgCtx = bgCanvasRef.current.getContext('2d');
-    
-    event.changes.added.forEach(item => {
-      // This is the correct way to iterate through Y.js changes
-      let content;
-      if (item.content && item.content.getContent) {
-        content = item.content.getContent();
-      } else if (Array.isArray(item.content)) {
-        content = item.content;
-      } else {
-        console.warn("Unexpected content format:", item.content);
-        return;
+    const renderStroke = (stroke, targetCtx) => {
+      if (!stroke || !stroke.points || stroke.points.length === 0) return;
+      
+      targetCtx.save();
+      targetCtx.strokeStyle = stroke.color || 'black';
+      targetCtx.lineWidth = stroke.width || linewidthRef.current;
+      targetCtx.beginPath();
+      targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      
+      for (let i = 1; i < stroke.points.length; i++) {
+        targetCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
       }
       
-      // Iterate through the content
-      for (let i = 0; i < content.length; i++) {
-        const strokeData = content[i];
-        const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
-        if (stroke && stroke.points) {
-          renderStroke(stroke, bgCtx);
+      targetCtx.stroke();
+      targetCtx.restore();
+    };
+
+    const loadExistingStrokes = () => {
+      const bgCtx = bgCanvasRef.current.getContext('2d');
+      bgCtx.clearRect(0, 0, bgCtx.canvas.width, bgCtx.canvas.height);
+      
+      yStrokes.forEach(item => {
+        const stroke = Array.isArray(item) ? item[0] : item;
+        renderStroke(stroke, bgCtx);
+      });
+    };
+
+    const handleStrokeAdded = (event) => {
+      const bgCtx = bgCanvasRef.current.getContext('2d');
+      
+      event.changes.added.forEach(item => {
+        let content;
+        if (item.content && item.content.getContent) {
+          content = item.content.getContent();
+        } else if (Array.isArray(item.content)) {
+          content = item.content;
+        } else {
+          console.warn("Unexpected content format:", item.content);
+          return;
         }
+        
+        for (let i = 0; i < content.length; i++) {
+          const strokeData = content[i];
+          const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
+          if (stroke && stroke.points) {
+            renderStroke(stroke, bgCtx);
+          }
+        }
+      });
+    };
+
+    const renderCanvas = () => {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.drawImage(bgCanvasRef.current, 0, 0);
+      
+      if (currentStroke.length > 0) {
+        const tempStroke = {
+          points: currentStroke,
+          color: strokeColorRef.current,
+          width: linewidthRef.current
+        };
+        renderStroke(tempStroke, ctx);
       }
-    });
-  };
 
-  // Main rendering loop for the foreground canvas
-  const renderCanvas = () => {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.drawImage(bgCanvasRef.current, 0, 0);
-    
-    // Draw current stroke (if any)
-    if (currentStroke.length > 0) {
-      const tempStroke = {
-        points: currentStroke,
-        color: strokeColorRef.current,
-        width: linewidthRef.current
-      };
-      renderStroke(tempStroke, ctx);
-    }
+      awareness.getStates().forEach((state, clientID) => {
+        if (state.cursor && clientID !== ydoc.clientID) {
+          ctx.save();
+          
+          ctx.fillStyle = state.isDrawing ? state.user.color : 'gray';
+          ctx.beginPath();
+          ctx.arc(state.cursor.x, state.cursor.y, 10, 0, 2 * Math.PI);
+          ctx.fill();
+          
+          ctx.font = '14px Arial';
+          ctx.fillStyle = 'white';
+          ctx.strokeStyle = 'black';
+          ctx.lineWidth = 3;
+          ctx.strokeText(state.user.name, state.cursor.x + 15, state.cursor.y + 15);
+          ctx.fillText(state.user.name, state.cursor.x + 15, state.cursor.y + 15);
+          
+          ctx.restore();
+        }
+      });
 
-    // Draw cursors
-    awareness.getStates().forEach((state, clientID) => {
-      if (state.cursor && clientID !== ydoc.clientID) {
+      if (showCursor && useHandTracking) {
         ctx.save();
-        ctx.fillStyle = state.isDrawing ? strokeColorRef.current : 'gray';
+        ctx.fillStyle = isDrawing ? strokeColorRef.current : 'gray';
         ctx.beginPath();
-        ctx.arc(state.cursor.x, state.cursor.y, 10, 0, 2 * Math.PI);
+        ctx.arc(cursorPosition.x, cursorPosition.y, 10, 0, 2 * Math.PI);
         ctx.fill();
         ctx.restore();
       }
+    };
+
+    const animationFrame = requestAnimationFrame(function loop() {
+      renderCanvas();
+      requestAnimationFrame(loop);
     });
 
-    // Draw own cursor if using hand tracking
-    if (showCursor && useHandTracking) {
-      ctx.save();
-      ctx.fillStyle = isDrawing ? strokeColorRef.current : 'gray';
-      ctx.beginPath();
-      ctx.arc(cursorPosition.x, cursorPosition.y, 10, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.restore();
-    }
+    yStrokes.observe(handleStrokeAdded);
+    provider.on('sync', loadExistingStrokes);
+    
+    loadExistingStrokes();
+
+    return () => {
+      yStrokes.unobserve(handleStrokeAdded);
+      provider.off('sync', loadExistingStrokes);
+      cancelAnimationFrame(animationFrame);
+    };
+  }, [ctx, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking, awareness, yStrokes, provider, ydoc.clientID]);
+
+  const addStrokeToBackground = (stroke) => {
+    const smoothedStroke = smoothStroke(stroke);
+    const newStroke = {
+      id: crypto.randomUUID(),
+      points: smoothedStroke,
+      color: strokeColorRef.current,
+      width: linewidthRef.current
+    };
+    
+    yStrokes.push([newStroke]);
+    
+    return smoothedStroke;
   };
-
-  // Set up render loop
-  const animationFrame = requestAnimationFrame(function loop() {
-    renderCanvas();
-    requestAnimationFrame(loop);
-  });
-
-  // Set up Yjs observers
-  yStrokes.observe(handleStrokeAdded);
-  provider.on('sync', loadExistingStrokes);
-  
-  // Try once on mount in case we're already connected
-  loadExistingStrokes();
-
-  return () => {
-    yStrokes.unobserve(handleStrokeAdded);
-    provider.off('sync', loadExistingStrokes);
-    cancelAnimationFrame(animationFrame);
-  };
-}, [ctx, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking, awareness, yStrokes, provider, ydoc.clientID]);
-
-
-const addStrokeToBackground = (stroke) => {
-  const smoothedStroke = smoothStroke(stroke);
-  const newStroke = {
-    id: crypto.randomUUID(),
-    points: smoothedStroke,
-    color: strokeColorRef.current,
-    width: linewidthRef.current
-  };
-  
-  // Add to Yjs - the observer will automatically render it
-  yStrokes.push([newStroke]);
-  
-  return smoothedStroke;
-};
 
   const smoothStroke = (points, iterations = 12) => {
     return points;
@@ -251,33 +258,30 @@ const addStrokeToBackground = (stroke) => {
   const compressStroke = (points) => {
     if (points.length <= 2) return points;
     
-    const tolerance = 2; // Adjust based on desired compression level
-    const result = [points[0]]; // Always keep the first point
+    const tolerance = 2;
+    const result = [points[0]];
     
     for (let i = 1; i < points.length - 1; i++) {
       const prev = result[result.length - 1];
       const current = points[i];
       const next = points[i + 1];
       
-      // Calculate if the current point significantly deviates from a straight line
       const dx1 = current.x - prev.x;
       const dy1 = current.y - prev.y;
       const dx2 = next.x - current.x;
       const dy2 = next.y - current.y;
       
-      // Calculate angle change
       const angle1 = Math.atan2(dy1, dx1);
       const angle2 = Math.atan2(dy2, dx2);
       const angleDiff = Math.abs(angle1 - angle2);
       
-      // Keep points where direction changes significantly
       if (angleDiff > tolerance * 0.1 || 
           Math.sqrt(dx1*dx1 + dy1*dy1) > tolerance * 5) {
         result.push(current);
       }
     }
     
-    result.push(points[points.length - 1]); // Always keep the last point
+    result.push(points[points.length - 1]);
     return result;
   }
   
@@ -327,7 +331,6 @@ const addStrokeToBackground = (stroke) => {
     const rawX = canvas.width - handData.position.x * scaleX;
     const rawY = handData.position.y * scaleY;
 
-    // Smooth the cursor position with existing smoothCursorPosition function
     const smoothedPosition = smoothCursorPosition({ x: rawX, y: rawY });
     setCursorPosition(smoothedPosition);
     setShowCursor(true);
@@ -335,13 +338,10 @@ const addStrokeToBackground = (stroke) => {
     const isPinching = handData.isPinching;
     const wasPinching = prevPinchState.current;
 
-    // Start drawing
     if (isPinching && !wasPinching) {
       setIsDrawing(true);
-      setCurrentStroke([smoothedPosition]); // Use smoothed position for first point
-    }
-    // Continue drawing
-    else if (isPinching && wasPinching) {
+      setCurrentStroke([smoothedPosition]);
+    } else if (isPinching && wasPinching) {
       const maxDistance = 100;
       let shouldAddPoint = true;
       const threshold = 5;
@@ -353,7 +353,6 @@ const addStrokeToBackground = (stroke) => {
           Math.pow(prevPoint.y - smoothedPosition.y, 2)
         );
 
-        // Add adaptive smoothing based on speed
         const speedFactor = Math.min(distance / maxDistance, 1);
         const adaptiveSmoothedPosition = {
           x: prevPoint.x + (smoothedPosition.x - prevPoint.x) * speedFactor,
@@ -366,9 +365,7 @@ const addStrokeToBackground = (stroke) => {
           setCurrentStroke(prev => [...prev, adaptiveSmoothedPosition]);
         }
       }
-    }
-    // End drawing
-    else if (!isPinching && wasPinching) {
+    } else if (!isPinching && wasPinching) {
       if (currentStrokeRef.current.length > 0) {
         const compressedStroke = compressStroke(currentStrokeRef.current);
         addStrokeToBackground(compressedStroke);
@@ -400,7 +397,7 @@ const addStrokeToBackground = (stroke) => {
 
   return (
     <>
-    <div className="absolute top-0 right-4 flex flex-col gap-2">
+    <div className="absolute top-20 right-4 flex flex-col gap-2">
       <button
         className="bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700"
         onClick={toggleHandTracking}
@@ -461,6 +458,33 @@ const addStrokeToBackground = (stroke) => {
           aria-label="Green"
         />
       </div>
+      <div className="mb-4">
+        <input
+          type="text"
+          value={userName}
+          onChange={(e) => {
+            const newName = e.target.value;
+            setUserName(newName);
+            localStorage.setItem('wb-username', newName);
+          }}
+          className="px-2 py-1 border rounded shadow-sm"
+          placeholder="Enter your name"
+        />
+      </div>
+    </div>
+    <div className="absolute top-20 left-4 bg-white/90 p-2 rounded shadow-lg">
+      <h3 className="font-bold mb-2">Connected Users:</h3>
+      <ul>
+        {Array.from(awareness.getStates()).map(([clientID, state]) => (
+          <li key={clientID} className="flex items-center gap-2">
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: state.user?.color || 'gray' }}
+            />
+            {state.user?.name || 'Anonymous'}
+          </li>
+        ))}
+      </ul>
     </div>
       <canvas
         ref={canvasRef}

@@ -709,35 +709,39 @@ const Canvas = ({ roomCode }) => {
           </button>
 
           <div className="flex gap-2">
-            {colors.map((color, index) => (
-              <button
-                key={color}
-                className={` cursor-pointer w-6 h-6 rounded-full hover:opacity-80 ${
-                  index === currentColorIndex ? 'ring-2 ring-offset-2 ring-white' : ''
-                }`}
-                style={{ backgroundColor: color }}
-                onClick={() => {
-                  strokeColorRef.current = color;
-                  setCurrentColorIndex(index);
-                }}
-                aria-label={color}
-              />
-            ))}
-
-            {/* Add Eraser Button */}
+          {colors.map((color, index) => (
             <button
-              className={`cursor-pointer w-6 h-6 rounded-full hover:opacity-80 flex items-center justify-center bg-gray-100 ${
-                strokeColorRef.current === 'white' ? 'ring-2 ring-offset-2 ring-white' : ''
+              key={color}
+              className={`cursor-pointer w-6 h-6 rounded-full transition-all ${
+                index === currentColorIndex
+                  ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                  : 'opacity-60 hover:opacity-100'
               }`}
+              style={{ backgroundColor: color }}
               onClick={() => {
-                strokeColorRef.current = 'white';
-                setCurrentColorIndex(-1); // Set to -1 to indicate none of the regular colors are selected
+                strokeColorRef.current = color;
+                setCurrentColorIndex(index);
               }}
-              aria-label="Eraser"
-            >
-              <Eraser size={14} />
-            </button>
-          </div>
+              aria-label={color}
+            />
+          ))}
+
+          {/* Add Eraser Button */}
+          <button
+            className={`cursor-pointer w-6 h-6 rounded-full transition-all flex items-center justify-center bg-gray-100 ${
+              strokeColorRef.current === 'white'
+                ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                : 'opacity-60 hover:opacity-100'
+            }`}
+            onClick={() => {
+              strokeColorRef.current = 'white';
+              setCurrentColorIndex(-1); // Set to -1 to indicate none of the regular colors are selected
+            }}
+            aria-label="Eraser"
+          >
+            <Eraser size={14} />
+          </button>
+        </div>
 
 
           <div className="slider-container flex flex-col items-center gap-1 w-full px-2">

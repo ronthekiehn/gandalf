@@ -1,59 +1,85 @@
-const http = require('http')
-const WebSocket = require('ws')
-const { setupWSConnection } = require('y-websocket/bin/utils.js')
-const crypto = require('crypto')
+const http = require('http');
+const WebSocket = require('ws');
+const { setupWSConnection } = require('y-websocket/bin/utils.js');
+const crypto = require('crypto');
+const cors = require('cors');
+const Y = require('yjs');
 
-// Use environment variables or default values
-const port = process.env.PORT || 80
-const host = process.env.HOST || '0.0.0.0'
+const port = process.env.PORT || 1234;
+const host = process.env.HOST || '0.0.0.0';
 
-// Add these constants at the top after the imports
-const MAX_CONNECTION_TIME = 10 * 60 * 1000; // 10 minutes in milliseconds
-const CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
+
 const ANONYMOUS_USER_REGEX = /^User-\d+$/;
 
-// Track connected clients
-const clients = new Map()
-const uniqueClients = new Set()
+const clients = new Map();
+const rooms = new Map();
 
-// Create a basic HTTP server
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' })
-  res.end('Yjs WebSocket Server is running\n')
-})
-
-// Create a WebSocket server that piggybacks on the HTTP server
-const wss = new WebSocket.Server({ server })
-
-// Add cleanup function after the server creation
-const cleanupStaleConnections = () => {
-  const now = Date.now();
-  for (const [clientId, client] of clients.entries()) {
-    const connectionDuration = now - client.connectedAt;
-    if (connectionDuration > MAX_CONNECTION_TIME) {
-      console.log(`Kicking client ${clientId} - Connected for ${Math.round(connectionDuration / 1000)}s`);
-      if (client.ws && client.ws.readyState === WebSocket.OPEN) {
-        client.ws.close(1000, 'Session timeout (10 minutes)');
+  const corsMiddleware = cors({
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  });
+  
+  corsMiddleware(req, res, () => {
+    if (req.url === '/create-room') {
+      const roomCode = crypto.randomUUID().slice(0, 8);
+      if (!rooms.has(roomCode)) {
+        rooms.set(roomCode, new Y.Doc());
       }
-      clients.delete(clientId);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ roomCode }));
+    } else if (req.url.startsWith('/check-room')) {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const roomCode = url.searchParams.get('roomCode');
+      const exists = rooms.has(roomCode);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ exists }));
+    } else {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('Yjs WebSocket Server is running\n');
     }
-  }
-};
+  });
+});
 
-// When a client connects, set up the Yjs WebSocket connection
+const wss = new WebSocket.Server({ server });
+
+
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `ws://${req.headers.host}`);
+  const roomCode = url.searchParams.get('room');
   const connectionType = url.searchParams.get('type');
-  const userName = url.searchParams.get('username');
+  const userName = url.searchParams.get('username') || `User-${Math.floor(Math.random() * 1000)}`;
 
-  // Only track awareness connections with valid usernames
-  if (connectionType === 'awareness' && userName && !ANONYMOUS_USER_REGEX.test(userName)) {
+  //console.log(`Connection requested - Username: ${userName}, Room: ${roomCode}`);
+  
+  if (!roomCode) {
+    ws.close(1000, 'No room code provided');
+    return;
+  }
+
+  // Get the document name from the WebSocket protocol path
+  // This is set by y-websocket when creating the WebsocketProvider
+  const pathParts = url.pathname.split('/');
+  const docName = pathParts[pathParts.length - 1] || roomCode;
+  
+  // Use the room code alone as the unique identifier
+  // This ensures each room gets its own document
+  const roomDocKey = roomCode;
+  
+  if (!rooms.has(roomDocKey)) {
+    rooms.set(roomDocKey, new Y.Doc());
+  }
+
+  const yDoc = rooms.get(roomDocKey);
+
+  if (connectionType === 'awareness' && !ANONYMOUS_USER_REGEX.test(userName)) {
+
     const clientId = crypto.randomUUID();
     
-    // Clean up any existing connections from this IP
     for (const [existingId, client] of clients.entries()) {
-      if (client.ip === req.socket.remoteAddress) {
-        console.log(`Cleaning up existing connection for IP: ${client.ip}`);
+      if (client.ip === req.socket.remoteAddress && client.roomCode === roomCode) {
         if (client.ws.readyState === WebSocket.OPEN) {
           client.ws.close(1000, 'New connection from same IP');
         }
@@ -66,65 +92,33 @@ wss.on('connection', (ws, req) => {
       connectedAt: new Date(),
       ip: req.socket.remoteAddress,
       lastActive: new Date(),
-      userName: userName,
-      ws: ws
+      userName,
+      roomCode,
+      ws
     };
     
     clients.set(clientId, clientInfo);
-    
-    console.log(`New user connected - Name: ${userName}, ID: ${clientId}`);
-    console.log(`Total users: ${clients.size}`);
-    
-    // Handle client disconnect
+
     ws.on('close', () => {
       clients.delete(clientId);
-      console.log(`User disconnected - ID: ${clientId}`);
-      console.log(`Total users: ${clients.size}`);
     });
     
-    // Update last active timestamp on messages
-    ws.on('message', (message) => {
-      try {
-        // Handle binary messages (Yjs sync)
-        if (message instanceof Buffer || message instanceof ArrayBuffer) {
-          // Broadcast to all clients except sender
-          wss.clients.forEach((client) => {
-            if (client !== ws && client.readyState === WebSocket.OPEN) {
-              client.send(message)
-            }
-          })
-          return
-        }
-
-        // Handle text messages (points)
-        const data = JSON.parse(message.toString())
-        if (data.type === 'point') {
-          // Broadcast point to all clients except sender
-          wss.clients.forEach((client) => {
-            if (client !== ws && client.readyState === WebSocket.OPEN) {
-              client.send(JSON.stringify(data))
-            }
-          })
-        }
-      } catch (error) {
-        console.error('Error processing message:', error)
-      }
-
-      // Update last active timestamp
+    ws.on('message', () => {
       if (clients.has(clientId)) {
-        clients.get(clientId).lastActive = new Date()
+        clients.get(clientId).lastActive = new Date();
       }
     });
   }
 
-  // Enable cross-origin connections
-  setupWSConnection(ws, req, { 
+  setupWSConnection(ws, req, {
+    doc: yDoc,
     cors: true,
-    maxBackoffTime: 2500
+    maxBackoffTime: 2500,
+    gc: false
   });
+
 });
 
-// Add helper function to get connected clients info
 const getConnectedClients = () => {
   return Array.from(clients.values()).map(client => ({
     id: client.id,
@@ -132,27 +126,24 @@ const getConnectedClients = () => {
     ip: client.ip,
     lastActive: client.lastActive,
     userName: client.userName,
+    roomCode: client.roomCode,
     connectionDuration: Date.now() - client.connectedAt
-  }))
-}
+  }));
+};
 
-// Log active clients
-const activeClients = getConnectedClients()
-console.log(activeClients)
+setInterval(() => {
+  const activeClients = getConnectedClients();
+  console.log('Active clients:', activeClients);
+}, 60000);
 
-// Add cleanup interval before server.listen
-const cleanup = setInterval(cleanupStaleConnections, CHECK_INTERVAL);
 
-// Start the server
 server.listen(port, host, () => {
   console.log(`Yjs WebSocket Server is running on ws://${host}:${port}`);
   
-  // Clean up on server shutdown
   process.on('SIGINT', () => {
-    clearInterval(cleanup);
     wss.close(() => {
       console.log('WebSocket server closed');
       process.exit(0);
     });
   });
-})
+});

@@ -6,7 +6,7 @@ import { WebsocketProvider } from 'y-websocket';
 const Canvas = () => {
   const [provider] = useState(() => {
     const ydoc = new Y.Doc();
-    const provider = new WebsocketProvider('ws://10.150.155.65:1234', 'my-room', ydoc);
+    const provider = new WebsocketProvider('ws://10.150.7.104:1234', 'my-room', ydoc);
     return provider;
   });
 
@@ -131,8 +131,6 @@ useEffect(() => {
     });
   };
 
-  // Handle new strokes coming in from other clients
-  // Handle new strokes coming in from other clients
   const handleStrokeAdded = (event) => {
     const bgCtx = bgCanvasRef.current.getContext('2d');
     
@@ -234,6 +232,7 @@ const addStrokeToBackground = (stroke) => {
 };
 
   const smoothStroke = (points, iterations = 12) => {
+    return points;
     if (points.length < 2) return points;
 
     let smoothed = points;
@@ -276,11 +275,10 @@ const addStrokeToBackground = (stroke) => {
     
     if (!isDrawing || useHandTracking) return;
     
-    if (currentStroke.length > 0) {
-      addStrokeToBackground(currentStroke);
+    if (currentStrokeRef.current.length > 0) {
+      addStrokeToBackground(currentStrokeRef.current);
     }
     
-    // Explicitly reset current stroke in both state and ref
     setCurrentStroke([]);
     currentStrokeRef.current = [];
     setIsDrawing(false);

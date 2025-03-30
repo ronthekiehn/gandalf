@@ -2,7 +2,7 @@ import './App.css';
 import Canvas from './components/Canvas';
 import { useState } from 'react';
 
-const API = 'http:///ws.ronkiehn.dev:1234';
+const API = 'http://ws.ronkiehn.dev';
 
 function App() {
   const [roomCode, setRoomCode] = useState(null);

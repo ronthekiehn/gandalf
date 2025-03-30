@@ -21,7 +21,7 @@ const Canvas = ({ roomCode }) => {
 
   const [provider] = useState(() => {
       const ydoc = new Y.Doc();
-      const wsUrl = new URL('ws://ws.ronkiehn.dev:1234');
+      const wsUrl = new URL('wss://ws.ronkiehn.dev');
       wsUrl.searchParams.set('username', userName);
       wsUrl.searchParams.set('room', roomCode);
       wsUrl.pathname = `/${roomCode}`;

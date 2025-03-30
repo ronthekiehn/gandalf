@@ -1,9 +1,4 @@
 {
-
-  "scripts": {
-  "prebuild": "apt-get update && apt-get install -y python3 python3-pip build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev",
-  "build": "npm install"
-},
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
     "canvas": "^3.1.0",

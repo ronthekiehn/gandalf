@@ -24,4 +24,4 @@ RUN npm install
 COPY . .
 
 # Set the command to run your app
-CMD ["node", "index.js"]
+CMD ["node", "ws-server.js"]

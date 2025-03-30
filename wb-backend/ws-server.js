@@ -30,7 +30,7 @@ const rooms = new Map();
 
 const server = http.createServer((req, res) => {
   const corsMiddleware = cors({
-    origin: 'http://localhost:5173',
+    origin: ['http://localhost:5173', 'https://gandalf.design', 'https://www.gandalf.design'],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true

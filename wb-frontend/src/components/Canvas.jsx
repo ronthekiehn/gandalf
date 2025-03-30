@@ -21,7 +21,7 @@ const Canvas = ({ roomCode }) => {
 
   const [provider] = useState(() => {
       const ydoc = new Y.Doc();
-      const wsUrl = new URL('https://ws.ronkiehn.dev:1234'); // Change to your WebSocket server URL
+      const wsUrl = new URL('wss://ws.ronkiehn.dev'); // Change to your WebSocket server URL
       wsUrl.searchParams.set('username', userName);
       wsUrl.searchParams.set('room', roomCode);
       wsUrl.pathname = `/${roomCode}`;
@@ -640,7 +640,7 @@ const Canvas = ({ roomCode }) => {
         timestamp: new Date().toISOString()
       });
 
-      const response = await fetch('https://ws.ronkiehn.dev:1234/generate', {
+      const response = await fetch('https://ws.ronkiehn.dev/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

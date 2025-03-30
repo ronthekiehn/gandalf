@@ -233,29 +233,7 @@ const addStrokeToBackground = (stroke) => {
 
   const smoothStroke = (points, iterations = 12) => {
     return points;
-    if (points.length < 2) return points;
-
-    let smoothed = points;
-    for (let iter = 0; iter < iterations; iter++) {
-      const newPoints = [];
-      newPoints.push(smoothed[0]);
-      for (let i = 0; i < smoothed.length - 1; i++) {
-        const p0 = smoothed[i];
-        const p1 = smoothed[i + 1];
-        newPoints.push({
-          x: p0.x * 0.5 + p1.x * 0.5,
-          y: p0.y * 0.5 + p1.y * 0.5
-        });
-        newPoints.push({
-          x: p0.x * 0.5 + p1.x * 0.5,
-          y: p0.y * 0.5 + p1.y * 0.5
-        });
-      }
-      newPoints.push(smoothed[smoothed.length - 1]);
-      smoothed = newPoints;
-    }
-    return smoothed;
-  };
+  }
 
   const startDrawing = (e) => {
     if (useHandTracking) return;
@@ -346,20 +324,23 @@ const addStrokeToBackground = (stroke) => {
     const canvas = canvasRef.current;
     const scaleX = canvas.width / 640;
     const scaleY = canvas.height / 480;
-    const x = canvas.width - handData.position.x * scaleX;
-    const y = handData.position.y * scaleY;
+    const rawX = canvas.width - handData.position.x * scaleX;
+    const rawY = handData.position.y * scaleY;
 
-    const smoothedPosition = smoothCursorPosition({ x, y });
+    // Smooth the cursor position with existing smoothCursorPosition function
+    const smoothedPosition = smoothCursorPosition({ x: rawX, y: rawY });
     setCursorPosition(smoothedPosition);
     setShowCursor(true);
 
     const isPinching = handData.isPinching;
     const wasPinching = prevPinchState.current;
 
+    // Start drawing
     if (isPinching && !wasPinching) {
       setIsDrawing(true);
-      setCurrentStroke([{ x, y }]);
+      setCurrentStroke([smoothedPosition]); // Use smoothed position for first point
     }
+    // Continue drawing
     else if (isPinching && wasPinching) {
       const maxDistance = 100;
       let shouldAddPoint = true;
@@ -368,18 +349,25 @@ const addStrokeToBackground = (stroke) => {
       if (currentStrokeRef.current.length > 0) {
         const prevPoint = currentStrokeRef.current[currentStrokeRef.current.length - 1];
         const distance = Math.sqrt(
-          Math.pow(prevPoint.x - x, 2) + Math.pow(prevPoint.y - y, 2)
+          Math.pow(prevPoint.x - smoothedPosition.x, 2) + 
+          Math.pow(prevPoint.y - smoothedPosition.y, 2)
         );
+
+        // Add adaptive smoothing based on speed
+        const speedFactor = Math.min(distance / maxDistance, 1);
+        const adaptiveSmoothedPosition = {
+          x: prevPoint.x + (smoothedPosition.x - prevPoint.x) * speedFactor,
+          y: prevPoint.y + (smoothedPosition.y - prevPoint.y) * speedFactor
+        };
 
         if (distance > maxDistance || distance < threshold) {
           shouldAddPoint = false;
+        } else if (shouldAddPoint) {
+          setCurrentStroke(prev => [...prev, adaptiveSmoothedPosition]);
         }
       }
-
-      if (shouldAddPoint) {
-        setCurrentStroke(prev => [...prev, { x, y }]);
-      }
     }
+    // End drawing
     else if (!isPinching && wasPinching) {
       if (currentStrokeRef.current.length > 0) {
         const compressedStroke = compressStroke(currentStrokeRef.current);

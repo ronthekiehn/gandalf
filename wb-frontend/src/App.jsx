@@ -1,7 +1,7 @@
 import './App.css';
 import Canvas from './components/Canvas';
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 
 const API = 'https://ws.ronkiehn.dev';
 
@@ -11,12 +11,21 @@ function App() {
   const [error, setError] = useState(null);
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   
+
   useEffect(() => {
-    if (roomId && !roomCode) {
+    // Reset room code when navigating to home page
+    if (location.pathname === '/') {
+      setRoomCode(null);
+      setError(null);
+    } 
+    // Try to join the room when there's a roomId parameter
+    else if (roomId && roomId !== roomCode) {
       checkAndJoinRoom(roomId);
     }
-  }, [roomId]);
+  }, [location.pathname, roomId]);
+
   
   const checkAndJoinRoom = async (code) => {
     try {
@@ -27,6 +36,7 @@ function App() {
         const { exists } = await response.json();
         if (exists) {
           setRoomCode(code);
+          navigate(`/${code}`);
         } else {
           // Room doesn't exist, redirect to home
           navigate('/', { replace: true });
@@ -52,24 +62,10 @@ function App() {
       setRoomCode(roomCode);
       
       // Update URL when creating a new room
-      navigate(`/${roomCode}`, { replace: true });
+      navigate(`/${roomCode}`);
     } catch (error) {
       console.error('Error creating room:', error);
       setError('Error creating room. Please try again.');
-    }
-  };
-
-  const joinRoom = async (code) => {
-    if (!code || code.trim() === '') {
-      alert('Please enter a room code');
-      return;
-    }
-    
-    await checkAndJoinRoom(code);
-    
-    // Update URL when joining a room
-    if (roomCode) {
-      navigate(`/${code}`, { replace: true });
     }
   };
 
@@ -121,7 +117,7 @@ if (!roomCode) {
               type="text"
               placeholder="room code"
               className="bg-zinc-100 placeholder:text-stone-500 p-3 rounded-xl text-center "
-              onKeyPress={(e) => e.key === 'Enter' && joinRoom(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && checkAndJoinRoom(e.target.value)}
             />
           )}
          {error && (

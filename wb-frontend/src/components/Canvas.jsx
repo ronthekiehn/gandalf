@@ -940,7 +940,7 @@ const Canvas = ({ roomCode }) => {
           />
 
           <button
-            className="text-white p-2 w-full rounded-full bg-green-600 hover:-translate-y-0.5 transition-all duration-200 ease-in-out hover:shadow-lg cursor-pointer"
+            className="text-black p-2 w-full rounded-full bg-gray-100 hover:-translate-y-0.5 transition-all duration-200 ease-in-out hover:shadow-lg cursor-pointer"
             onClick={generateImage}
             disabled={isGenerating}
           >

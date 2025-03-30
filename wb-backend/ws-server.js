@@ -23,8 +23,16 @@ const server = http.createServer((req, res) => {
   });
   
   corsMiddleware(req, res, () => {
-    if (req.url === '/create-room') {
-      const roomCode = crypto.randomUUID().slice(0, 8);
+    if (req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        activeConnections: wss.clients.size,
+        activeRooms: rooms.size
+      }));
+    } else if (req.url === '/create-room') {
+      const roomCode = crypto.randomUUID().slice(0, 4);
       if (!rooms.has(roomCode)) {
         rooms.set(roomCode, new Y.Doc());
       }

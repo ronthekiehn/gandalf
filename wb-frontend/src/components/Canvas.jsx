@@ -700,15 +700,21 @@ const Canvas = ({ roomCode }) => {
   return (
     <DarkModeContext.Provider value={{ darkMode, setDarkMode }}>
       <div className={`h-full w-full flex justify-center ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
-        <div className={`bg-white absolute bottom-4 px-3 py-2 flex gap-4 justify-between items-center shadow-lg rounded-2xl shadow-neutral-500 border border-stone-300 ${darkMode ? 'text-white' : 'text-black'}`}>
-          <button
-            className="cursor-pointer p-2 rounded-full hover:bg-gray-100 transition-colors"
-            onClick={toggleHandTracking}
-          >
-            {useHandTracking ? <Hand /> : <Mouse />}
-          </button>
+      <div className={`absolute bottom-4 px-3 py-2 flex gap-4 justify-between items-center shadow-lg rounded-2xl shadow-neutral-500 border ${
+        darkMode
+          ? 'bg-gray-200 text-gray-800 border-gray-300'
+          : 'bg-white text-black border-stone-300'
+      }`}>
+        <button
+          className={`cursor-pointer p-2 rounded-full transition-colors ${
+            darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+          }`}
+          onClick={toggleHandTracking}
+        >
+          {useHandTracking ? <Hand /> : <Mouse />}
+        </button>
 
-          <div className="flex gap-2">
+        <div className="flex gap-2">
           {colors.map((color, index) => (
             <button
               key={color}
@@ -716,7 +722,7 @@ const Canvas = ({ roomCode }) => {
                 index === currentColorIndex
                   ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
                   : 'opacity-60 hover:opacity-100'
-              }`}
+              } ${darkMode ? 'ring-offset-gray-800' : 'ring-offset-white'}`}
               style={{ backgroundColor: color }}
               onClick={() => {
                 strokeColorRef.current = color;
@@ -728,10 +734,13 @@ const Canvas = ({ roomCode }) => {
 
           {/* Add Eraser Button */}
           <button
-            className={`cursor-pointer w-6 h-6 rounded-full transition-all flex items-center justify-center bg-gray-100 ${
+            className={`cursor-pointer w-6 h-6 rounded-full transition-all flex items-center justify-center ${
               strokeColorRef.current === 'white'
                 ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
                 : 'opacity-60 hover:opacity-100'
+            } ${darkMode
+                ? 'bg-gray-600 ring-offset-gray-800'
+                : 'bg-gray-100 ring-offset-white'
             }`}
             onClick={() => {
               strokeColorRef.current = 'white';
@@ -739,79 +748,102 @@ const Canvas = ({ roomCode }) => {
             }}
             aria-label="Eraser"
           >
-            <Eraser size={14} />
+            <Eraser size={14} color={darkMode ? "white" : "black"} />
           </button>
         </div>
 
 
-          <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
-            <label htmlFor="linewidth" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}></label>
-            <input
-              type="range"
-              id="linewidth"
-              name="linewidth"
-              min="2"
-              max="10"
-              value={lineWidth}
-              onChange={(e) => {
-                const newWidth = Math.max(2, Math.min(10, parseInt(e.target.value)));
-                linewidthRef.current = newWidth;
-                setLineWidth(newWidth);
-                setCtx((prevCtx) => {
-                  if (prevCtx) {
-                    prevCtx.lineWidth = newWidth;
-                  }
-                  return prevCtx;
-                });
-              }}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-black [&::-moz-range-thumb]:border [&::-moz-range-thumb]:cursor-pointer"
-              style={{
-                background: `linear-gradient(to right, #000000 0%, #000000 ${((lineWidth - 2) / 8) * 100}%, #ccc ${((lineWidth - 2) / 8) * 100}%, #ccc 100%)`
-              }}
-            />
-          </div>
+        <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
+          <label htmlFor="linewidth" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}></label>
+          <input
+            type="range"
+            id="linewidth"
+            name="linewidth"
+            min="2"
+            max="10"
+            value={lineWidth}
+            onChange={(e) => {
+              const newWidth = Math.max(2, Math.min(10, parseInt(e.target.value)));
+              linewidthRef.current = newWidth;
+              setLineWidth(newWidth);
+              setCtx((prevCtx) => {
+                if (prevCtx) {
+                  prevCtx.lineWidth = newWidth;
+                }
+                return prevCtx;
+              });
+            }}
+            className={`w-full h-2 rounded-lg appearance-none cursor-pointer
+              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4
+              [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full
+              [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:cursor-pointer
+              [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4
+              [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border
+              [&::-moz-range-thumb]:cursor-pointer
+              ${darkMode
+                ? '[&::-webkit-slider-thumb]:bg-gray-300 [&::-webkit-slider-thumb]:border-gray-400 [&::-moz-range-thumb]:bg-gray-300 bg-gray-700'
+                : '[&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-gray-300 [&::-moz-range-thumb]:bg-black bg-gray-200'
+              }`}
+            style={{
+              background: darkMode
+                ? `linear-gradient(to right, #ffffff 0%, #ffffff ${((lineWidth - 2) / 8) * 100}%, #4B5563 ${((lineWidth - 2) / 8) * 100}%, #4B5563 100%)`
+                : `linear-gradient(to right, #000000 0%, #000000 ${((lineWidth - 2) / 8) * 100}%, #ccc ${((lineWidth - 2) / 8) * 100}%, #ccc 100%)`
+            }}
+          />
+      </div>
+        <button
+          className={`cursor-pointer aspect-square p-2 rounded-full transition-colors gap-2 ${
+            darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+          }`}
+          onClick={addTextbox}
+        >
+          <Type color={darkMode ? "white" : "black"} />
+        </button>
 
-          <button
-            className="cursor-pointer aspect-square p-2 rounded-full hover:bg-gray-100 transition-colors gap-2"
-            onClick={addTextbox}
-          >
-            <Type />
-          </button>
-
-          <button
-            className="cursor-pointer text-red p-2 rounded-full text-red-500 hover:bg-gray-100 transition-colors"
-            onClick={clearCanvas}
-          >
-            <X />
-          </button>
-
+        <button
+          className={`cursor-pointer p-2 rounded-full text-red-500 transition-colors ${
+            darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+          }`}
+          onClick={clearCanvas}
+        >
+          <X />
+        </button>
         </div>
 
         <div className='absolute top-2 right-4 flex gap-2 items-center'>
-            {Array.from(awareness.getStates())
-              .filter(([_, state]) => state.user?.name && state.user?.color)
-              .map(([clientID, state]) => (
-                <p key={clientID} className="text-white text-sm flex justify-center items-center p-1 w-6 h-6 text-center rounded-full"
-                style={{ backgroundColor: state.user.color }}>
-                  {state.user.name.charAt(0)}
-                </p>
-              ))}
-          </div>
-        <div className={`absolute top-12 right-4 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-2
-         bg-white px-4 pb-4 pt-5 rounded-xl shadow-sm border border-stone-300 shadow-neutral-500 flex flex-col gap-4`}>
+          {Array.from(awareness.getStates())
+            .filter(([_, state]) => state.user?.name && state.user?.color)
+            .map(([clientID, state]) => (
+              <p
+                key={clientID}
+                className="text-white text-sm flex justify-center items-center p-1 w-6 h-6 text-center rounded-full shadow-sm"
+                style={{ backgroundColor: state.user.color }}
+              >
+                {state.user.name.charAt(0)}
+              </p>
+            ))}
+        </div>
 
-            <input
-              type="text"
-              value={userName}
-              onChange={(e) => {
-                const newName = e.target.value;
-                setUserName(newName);
-                localStorage.setItem('wb-username', newName);
-              }}
-              className="text-center p-2 border rounded shadow-sm"
-              placeholder="name"
-            />
-
+        <div className={`absolute top-12 right-4 p-2 px-4 pb-4 pt-5 rounded-xl shadow-md border flex flex-col gap-4 ${
+          darkMode
+            ? 'bg-gray-200 text-gray-800 border-gray-300 shadow-gray-900'
+            : 'bg-white text-black border-gray-200 shadow-neutral-300'
+        }`}>
+          <input
+            type="text"
+            value={userName}
+            onChange={(e) => {
+              const newName = e.target.value;
+              setUserName(newName);
+              localStorage.setItem('wb-username', newName);
+            }}
+            className={`text-center p-2 border rounded shadow-sm ${
+              darkMode
+                ? 'bg-white text-gray-800 border-gray-300'
+                : 'bg-white text-black border-gray-200'
+            }`}
+            placeholder="name"
+          />
 
           <button
             className="text-white p-2 w-full rounded-full bg-green-600 hover:-translate-y-0.5 transition-all duration-200 ease-in-out hover:shadow-lg cursor-pointer"
@@ -822,15 +854,13 @@ const Canvas = ({ roomCode }) => {
           </button>
 
           <AdvancedFeatures
-          canvasRef={canvasRef}
-          bgCanvasRef={bgCanvasRef}
-          ydoc={ydoc}
-          awareness={awareness}
-        />
-
-
-
+            canvasRef={canvasRef}
+            bgCanvasRef={bgCanvasRef}
+            ydoc={ydoc}
+            awareness={awareness}
+          />
         </div>
+
         <canvas
           ref={canvasRef}
           className={`w-full h-full ${darkMode ? 'bg-gray-800' : 'bg-white'}`}
@@ -899,7 +929,9 @@ const Canvas = ({ roomCode }) => {
       </div>
 
       {generatedImages.length > 0 && (
-        <div className="fixed bottom-4 left-4 bg-white/95 p-4 rounded-lg shadow-lg max-w-[80vw]">
+        <div className={`fixed bottom-4 left-4 p-4 rounded-lg shadow-lg max-w-[80vw] ${
+          darkMode ? 'bg-gray-800/95 text-white' : 'bg-white/95 text-black'
+        }`}>
           <h3 className="font-bold mb-2">Generated Images</h3>
           <div className="flex gap-4 overflow-x-auto pb-2">
             {generatedImages.map((img) => (
@@ -914,7 +946,9 @@ const Canvas = ({ roomCode }) => {
                 <img
                   src={img.src}
                   alt={img.alt}
-                  className="h-48 w-48 object-contain rounded-lg border-2 border-gray-200"
+                  className={`h-48 w-48 object-contain rounded-lg border-2 ${
+                    darkMode ? 'border-gray-600' : 'border-gray-200'
+                  }`}
                 />
                 <a
                   href={img.src}

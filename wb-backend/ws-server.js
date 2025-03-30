@@ -14,6 +14,7 @@ const ANONYMOUS_USER_REGEX = /^User-\d+$/;
 
 // Track connected clients
 const clients = new Map()
+const uniqueClients = new Set()
 
 // Create a basic HTTP server
 const server = http.createServer((req, res) => {
@@ -82,9 +83,36 @@ wss.on('connection', (ws, req) => {
     });
     
     // Update last active timestamp on messages
-    ws.on('message', () => {
+    ws.on('message', (message) => {
+      try {
+        // Handle binary messages (Yjs sync)
+        if (message instanceof Buffer || message instanceof ArrayBuffer) {
+          // Broadcast to all clients except sender
+          wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+              client.send(message)
+            }
+          })
+          return
+        }
+
+        // Handle text messages (points)
+        const data = JSON.parse(message.toString())
+        if (data.type === 'point') {
+          // Broadcast point to all clients except sender
+          wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify(data))
+            }
+          })
+        }
+      } catch (error) {
+        console.error('Error processing message:', error)
+      }
+
+      // Update last active timestamp
       if (clients.has(clientId)) {
-        clients.get(clientId).lastActive = new Date();
+        clients.get(clientId).lastActive = new Date()
       }
     });
   }

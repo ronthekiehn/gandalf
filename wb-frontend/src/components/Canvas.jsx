@@ -10,7 +10,6 @@ const Canvas = () => {
   });
 
   useEffect(() => {
-    // Clear anonymous usernames from localStorage
     const savedName = localStorage.getItem('wb-username');
     if (savedName && /^User-\d+$/.test(savedName)) {
       localStorage.removeItem('wb-username');
@@ -28,7 +27,6 @@ const Canvas = () => {
 
   const ydoc = provider.doc;
   const yStrokes = ydoc.getArray('strokes');
-  const yPoints = ydoc.getArray('points');
   const awareness = provider.awareness;
 
   const canvasRef = useRef(null);
@@ -59,6 +57,18 @@ const Canvas = () => {
   const currentStrokeRef = useRef([]);
   const cursorHistoryRef = useRef([]);
   const cursorHistorySize = 2;
+  const wasClickingRef = useRef(false);
+
+  const colors = ['black', 'red', 'blue', 'green'];
+  const [currentColorIndex, setCurrentColorIndex] = useState(0);
+
+  const cycleColor = () => {
+    setCurrentColorIndex(prevIndex => {
+      const newIndex = (prevIndex + 1) % colors.length;
+      strokeColorRef.current = colors[newIndex];
+      return newIndex;
+    });
+  };
 
   useEffect(() => {
     bgCanvasRef.current = bgCanvas;
@@ -307,35 +317,6 @@ const Canvas = () => {
     };
   }, [isResizing, selectedTextbox]);
 
-  useEffect(() => {
-    if (!ctx) return;
-
-    const handlePointAdded = (event) => {
-      event.changes.added.forEach(item => {
-        const points = item.content.getContent();
-        points.forEach(pointData => {
-          if (pointData.userId !== ydoc.clientID) {
-            ctx.save();
-            ctx.strokeStyle = pointData.color;
-            ctx.lineWidth = pointData.width;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            
-            ctx.beginPath();
-            ctx.moveTo(pointData.point.x, pointData.point.y);
-            ctx.lineTo(pointData.point.x, pointData.point.y);
-            ctx.stroke();
-            
-            ctx.restore();
-          }
-        });
-      });
-    };
-
-    yPoints.observe(handlePointAdded);
-    return () => yPoints.unobserve(handlePointAdded);
-  }, [ctx, ydoc.clientID]);
-
   const addTextbox = () => {
     const centerX = canvasRef.current.width / 2;
     const centerY = canvasRef.current.height / 2;
@@ -409,18 +390,7 @@ const Canvas = () => {
   const draw = (e) => {
     if (!isDrawing || useHandTracking) return;
     const point = getPointerPosition(e);
-    
-    // Add point to current stroke locally
     setCurrentStroke(prev => [...prev, point]);
-    
-    // Send point immediately to other clients
-    yPoints.push([{
-      id: crypto.randomUUID(),
-      point,
-      color: strokeColorRef.current,
-      width: linewidthRef.current,
-      userId: ydoc.clientID
-    }]);
   };
 
   const compressStroke = (points) => {
@@ -458,11 +428,6 @@ const Canvas = () => {
     if (currentStrokeRef.current.length > 0) {
       const compressedStroke = compressStroke(currentStrokeRef.current);
       addStrokeToBackground(compressedStroke);
-      
-      // Clear real-time points
-      ydoc.transact(() => {
-        yPoints.delete(0, yPoints.length);
-      });
     }
     
     setCurrentStroke([]);
@@ -509,8 +474,24 @@ const Canvas = () => {
     setShowCursor(true);
 
     const isPinching = handData.isPinching;
+    const isFist = handData.isFist;
+    const isClicking = handData.isClicking;
     const wasPinching = prevPinchState.current;
+    const wasClicking = wasClickingRef.current;
 
+    // Handle fist gesture for clearing canvas
+    if (isFist) {
+      clearCanvas();
+      return;
+    }
+
+    // Only cycle color when click gesture ends
+    if (!isClicking && wasClicking) {
+      cycleColor();
+    }
+    wasClickingRef.current = isClicking;
+
+    // Handle drawing with pinch gesture
     if (isPinching && !wasPinching) {
       setIsDrawing(true);
       setCurrentStroke([smoothedPosition]);
@@ -547,6 +528,7 @@ const Canvas = () => {
       setCurrentStroke([]);
       setIsDrawing(false);
     }
+
     prevPinchState.current = isPinching;
   };
 
@@ -604,34 +586,28 @@ const Canvas = () => {
               return prevCtx;
             });
           }}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-black [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
           style={{
-            background: `linear-gradient(to right, #000000 0%, #000000 ${lineWidth / 10 * 100}%, #ccc ${lineWidth / 10 * 100}%, #ccc 100%)`
+            background: `linear-gradient(to right, #000000 0%, #000000 ${((lineWidth - 2) / 8) * 100}%, #ccc ${((lineWidth - 2) / 8) * 100}%, #ccc 100%)`
           }}
         />
         <span className="text-xs text-gray-500">{lineWidth}px</span>
       </div>
       <div className="flex gap-2">
-        <button
-          className="w-10 h-10 rounded-full bg-black shadow-lg hover:opacity-80"
-          onClick={() => (strokeColorRef.current = 'black')}
-          aria-label="Black"
-        ></button>
-        <button
-          className="w-10 h-10 rounded-full bg-red-600 shadow-lg hover:opacity-80"
-          onClick={() => (strokeColorRef.current = 'red')}
-          aria-label="Red"
-        ></button>
-        <button
-          className="w-10 h-10 rounded-full bg-blue-600 shadow-lg hover:opacity-80"
-          onClick={() => (strokeColorRef.current = 'blue')}
-          aria-label="Blue"
-        />
-        <button
-          className="w-10 h-10 rounded-full bg-green-600 shadow-lg hover:opacity-80"
-          onClick={() => (strokeColorRef.current = 'green')}
-          aria-label="Green"
-        />
+        {colors.map((color, index) => (
+          <button
+            key={color}
+            className={`w-10 h-10 rounded-full shadow-lg hover:opacity-80 ${
+              index === currentColorIndex ? 'ring-2 ring-offset-2 ring-white' : ''
+            }`}
+            style={{ backgroundColor: color }}
+            onClick={() => {
+              strokeColorRef.current = color;
+              setCurrentColorIndex(index);
+            }}
+            aria-label={color}
+          />
+        ))}
       </div>
 
       <button
@@ -658,15 +634,17 @@ const Canvas = () => {
     <div className="absolute top-15 left-4 bg-white/90 p-2 rounded shadow-lg">
       <h3 className="font-bold mb-2">Connected Users:</h3>
       <ul>
-        {Array.from(awareness.getStates()).map(([clientID, state]) => (
-          <li key={clientID} className="flex items-center gap-2">
-            <span
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: state.user?.color}}
-            />
-            {state.user?.name}
-          </li>
-        ))}
+        {Array.from(awareness.getStates())
+          .filter(([_, state]) => state.user?.name && state.user?.color)
+          .map(([clientID, state]) => (
+            <li key={clientID} className="flex items-center gap-2">
+              <span
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: state.user.color }}
+              />
+              {state.user.name}
+            </li>
+          ))}
       </ul>
     </div>
       <canvas

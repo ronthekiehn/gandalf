@@ -95,7 +95,7 @@ const HandTracking = ({ onHandUpdate }) => {
           const landmarks = results.landmarks[0];
           const handedness = results.handednesses[0][0];
 
-          // Get index finger tip (landmark 8) and thumb tip (landmark 4)
+          // Get hand landmarks
           const indexTip = landmarks[8];
           const thumbTip = landmarks[4];
           const pinkyTip = landmarks[20];
@@ -104,7 +104,7 @@ const HandTracking = ({ onHandUpdate }) => {
           const wrist = landmarks[0];
 
           if (indexTip && thumbTip && wrist && pinkyTip && ringTip && middleTip) {
-            // Calculate distance for pinch detection
+            // Calculate distances for different gestures
             const pinch_distance = Math.sqrt(
               Math.pow(indexTip.x - thumbTip.x, 2) +
               Math.pow(indexTip.y - thumbTip.y, 2) +
@@ -126,15 +126,23 @@ const HandTracking = ({ onHandUpdate }) => {
               Math.pow(middleTip.z - wrist.z, 2)
             );
 
+            const ring_thumb_distance = Math.sqrt(
+              Math.pow(thumbTip.x - ringTip.x, 2) +
+              Math.pow(thumbTip.y - ringTip.y, 2) +
+              Math.pow(thumbTip.z - ringTip.z, 2)
+            );
 
-            // Update parent component
+            const isClicking = ring_thumb_distance < 0.08;
+
+            // Update parent component with all gesture states
             onHandUpdate({
               position: {
                 x: indexTip.x * videoRef.current.videoWidth,
                 y: indexTip.y * videoRef.current.videoHeight
               },
-              isPinching: pinch_distance < 0.08, // Normalized distance threshold
-              isFist: fist_distance < 0.5, // Normalized distance threshold
+              isPinching: pinch_distance < 0.08,
+              isFist: fist_distance < 0.5,
+              isClicking: isClicking,
               landmarks: landmarks,
               handedness: handedness.categoryName
             });

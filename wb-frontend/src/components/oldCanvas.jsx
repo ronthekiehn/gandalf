@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import HandTracking from './HandTracking';
+import * as Y from 'yjs'
+import { WebsocketProvider } from 'y-websocket';
 import AdvancedFeatures from './AdvancedFeatures';
 import { DarkModeContext } from '../contexts/DarkModeContext';
 import { X, Mouse, Hand, Type , Eraser } from 'lucide-react';
 import useWhiteboardStore from '../stores/whiteboardStore';
+import { useYjsSync } from '../hooks/useYjsSync';
 
 const Canvas = ({ roomCode }) => {
   const [userName, setUserName] = useState(() => {
@@ -11,28 +14,52 @@ const Canvas = ({ roomCode }) => {
     return savedName || `User-${Math.floor(Math.random() * 1000)}`;
   });
 
-  // Get store methods and state
-  const store = useWhiteboardStore();
-  
-  // Initialize Y.js connection
   useEffect(() => {
-    store.initializeYjs(roomCode, userName);
-    
-    // Clean up Y.js resources on unmount
-    return () => store.cleanupYjs();
-  }, [roomCode, userName]);
-  
-  // Get Y.js-related resources from store for AdvancedFeatures
-  const { provider, awareness } = store.getYjsResources();
+    const savedName = localStorage.getItem('wb-username');
+    if (savedName && /^User-\d+$/.test(savedName)) {
+      localStorage.removeItem('wb-username');
+      setUserName('');
+    }
+  }, []);
+
+  const [provider] = useState(() => {
+      const ydoc = new Y.Doc();
+      const wsUrl = new URL('wss://ws.ronkiehn.dev'); // Change to your WebSocket server URL
+      wsUrl.searchParams.set('username', userName);
+      wsUrl.searchParams.set('room', roomCode);
+      wsUrl.pathname = `/${roomCode}`;
+      console.log(`Connecting to room: ${roomCode}`);
+
+      const provider = new WebsocketProvider(wsUrl.toString(), roomCode, ydoc);
+
+      provider.on('status', (event) => {
+        console.log(`Room ${roomCode} - WebSocket status:`, event.status);
+      });
+
+      return provider;
+    });
+
+  const ydoc = provider.doc;
+  const yStrokes = ydoc.getArray('strokes');
+  const awareness = provider.awareness;
 
   const canvasRef = useRef(null);
   const bgCanvasRef = useRef(null);
-
+  const [bgCanvas] = useState(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - 70;
+    return canvas;
+  });
+  const [isDrawing, setIsDrawing] = useState(false);
   const strokeColorRef = useRef('black');
   const linewidthRef = useRef(3);
+  const [lineWidth, setLineWidth] = useState(3);
   const [ctx, setCtx] = useState(null);
   const [currentStroke, setCurrentStroke] = useState([]);
   const [useHandTracking, setUseHandTracking] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+  const [showCursor, setShowCursor] = useState(false);
   const [isHandReady, setIsHandReady] = useState(false);
   const [textboxes, setTextboxes] = useState([]);
   const [selectedTextbox, setSelectedTextbox] = useState(null);
@@ -55,7 +82,6 @@ const Canvas = ({ roomCode }) => {
     setCurrentColorIndex(prevIndex => {
       const newIndex = (prevIndex + 1) % colors.length;
       strokeColorRef.current = colors[newIndex];
-      store.setColor(colors[newIndex]);
       return newIndex;
     });
   };
@@ -78,14 +104,115 @@ const Canvas = ({ roomCode }) => {
     }
   }, [darkMode]);
 
-  useEffect(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight - 70;
-    store.setBgCanvas(canvas);
-    bgCanvasRef.current = canvas;
-  }, []);
 
+  useEffect(() => {
+    bgCanvasRef.current = bgCanvas;
+  }, [bgCanvas]);
+
+
+  useEffect(() => {
+    if (!bgCanvasRef.current || !yStrokes) return;
+
+    // Function to adjust stroke colors for dark mode
+    const updateStrokeColors = () => {
+      // Create temporary array of strokes
+      const existingStrokes = yStrokes.toArray();
+
+      ydoc.transact(() => {
+        // First clear all strokes
+        yStrokes.delete(0, yStrokes.length);
+
+        // Then add back with updated colors
+        existingStrokes.forEach(strokeData => {
+          const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
+
+          if (stroke && stroke.points) {
+            let updatedStroke;
+
+            if (darkMode) {
+              // When switching to dark mode:
+              // First change black to white, then white to gray-900
+              updatedStroke = {
+                ...stroke,
+                color: stroke.color === 'black' ? 'white' :
+                       stroke.color === 'white' ? '#111827' : // gray-900
+                       stroke.color // Keep other colors unchanged
+              };
+            } else {
+              // When switching to light mode:
+              // First change white to black, then gray-900 to white
+              updatedStroke = {
+                ...stroke,
+                color: stroke.color === 'white' ? 'black' :
+                       stroke.color === '#111827' ? 'white' :
+                       stroke.color // Keep other colors unchanged
+              };
+            }
+
+            yStrokes.push([updatedStroke]);
+          }
+        });
+      });
+
+      // Redraw the background canvas
+      const bgCtx = bgCanvasRef.current.getContext('2d');
+      bgCtx.clearRect(0, 0, bgCanvasRef.current.width, bgCanvasRef.current.height);
+
+      yStrokes.forEach(item => {
+        const stroke = Array.isArray(item) ? item[0] : item;
+        if (stroke && stroke.points) {
+          bgCtx.save();
+          bgCtx.strokeStyle = stroke.color;
+          bgCtx.lineWidth = stroke.width;
+          bgCtx.beginPath();
+          bgCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+
+          for (let i = 1; i < stroke.points.length; i++) {
+            bgCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
+          }
+
+          bgCtx.stroke();
+          bgCtx.restore();
+        }
+      });
+    };
+
+    // When dark mode changes, update the stroke colors
+    updateStrokeColors();
+
+  }, [darkMode, ydoc, yStrokes]);
+
+
+  useEffect(() => {
+    const updateLocalAwareness = () => {
+      if (useHandTracking && isHandReady) {
+        awareness.setLocalState({
+          cursor: cursorPosition,
+          isDrawing,
+          user: {
+            id: ydoc.clientID,
+            name: userName,
+            color: strokeColorRef.current
+          }
+        });
+      } else {
+        awareness.setLocalState({
+          cursor: { x: MouseEvent.x || cursorPosition.x, y: MouseEvent.y || cursorPosition.y },
+          isDrawing,
+          user: {
+            id: ydoc.clientID,
+            name: userName,
+            color: strokeColorRef.current
+          }
+        });
+      }
+    };
+
+    updateLocalAwareness();
+    return () => {
+      awareness.setLocalState(null);
+    };
+  }, [awareness, cursorPosition, isHandReady, useHandTracking, isDrawing, userName]);
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
@@ -103,7 +230,7 @@ const Canvas = ({ roomCode }) => {
       [context, bgCanvasRef.current.getContext('2d')].forEach(ctx => {
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.lineWidth = linewidthRef.current;
+        ctx.lineWidth = lineWidth;
         ctx.strokeStyle = strokeColorRef.current;
       });
     };
@@ -122,25 +249,74 @@ const Canvas = ({ roomCode }) => {
   }, [currentStroke]);
 
   useEffect(() => {
-    if (!useHandTracking) return;
-    cursorPositionRef.current = store.cursorPosition;
-  }, [store.cursorPosition]);
-
-  useEffect(() => {
     if (!ctx || !bgCanvasRef.current) return;
 
+    const renderStroke = (stroke, targetCtx) => {
+      if (!stroke || !stroke.points || stroke.points.length === 0) return;
+
+      targetCtx.save();
+      targetCtx.strokeStyle = stroke.color || 'black';
+      targetCtx.lineWidth = stroke.width || ((strokeColorRef.current === 'white' || strokeColorRef.current === '#111827') ? linewidthRef.current * 10 : linewidthRef.current);      ;
+      targetCtx.beginPath();
+      targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+
+      for (let i = 1; i < stroke.points.length; i++) {
+        targetCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+
+      targetCtx.stroke();
+      targetCtx.restore();
+    };
+
+    const loadExistingStrokes = () => {
+      const bgCtx = bgCanvasRef.current.getContext('2d');
+      bgCtx.clearRect(0, 0, bgCtx.canvas.width, bgCtx.canvas.height);
+
+      yStrokes.forEach(item => {
+        const stroke = Array.isArray(item) ? item[0] : item;
+        renderStroke(stroke, bgCtx);
+      });
+    };
+
+    const handleStrokeAdded = (event) => {
+      const bgCtx = bgCanvasRef.current.getContext('2d');
+
+      event.changes.added.forEach(item => {
+        let content;
+        if (item.content && item.content.getContent) {
+          content = item.content.getContent();
+        } else if (Array.isArray(item.content)) {
+          content = item.content;
+        } else {
+          console.warn("Unexpected content format:", item.content);
+          return;
+        }
+
+        for (let i = 0; i < content.length; i++) {
+          const strokeData = content[i];
+          const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
+          if (stroke && stroke.points) {
+            renderStroke(stroke, bgCtx);
+          }
+        }
+      });
+    };
+
     const renderCanvas = () => {
-      const { cursorPosition, showCursor, isDrawing, currentLine } = store;
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.drawImage(bgCanvasRef.current, 0, 0);
 
-      if (currentLine) {
-        store.renderStroke(currentLine, ctx);
+      if (currentStroke.length > 0) {
+        const tempStroke = {
+          points: currentStroke,
+          color: strokeColorRef.current,
+          width: ((darkMode && strokeColorRef.current === '#111827') || (!darkMode && strokeColorRef.current === 'white') ? linewidthRef.current * 10 : linewidthRef.current)
+        };
+        renderStroke(tempStroke, ctx);
       }
 
-      // Draw other users' cursors
-      store.awarenessStates.forEach(([clientID, state]) => {
-        if (state.cursor && clientID !== store.clientID) {
+      awareness.getStates().forEach((state, clientID) => {
+        if (state.cursor && clientID !== ydoc.clientID) {
           ctx.save();
 
           ctx.fillStyle = state.isDrawing ? state.user.color : 'gray';
@@ -161,9 +337,9 @@ const Canvas = ({ roomCode }) => {
 
       if (showCursor && useHandTracking) {
         ctx.save();
-        ctx.fillStyle = store.isDrawing ? strokeColorRef.current : 'gray';
+        ctx.fillStyle = isDrawing ? strokeColorRef.current : 'gray';
         ctx.beginPath();
-        ctx.arc(cursorPositionRef.current.x, cursorPositionRef.current.y, 10, 0, 2 * Math.PI);
+        ctx.arc(cursorPosition.x, cursorPosition.y, 10, 0, 2 * Math.PI);
         ctx.fill();
         ctx.restore();
       }
@@ -174,13 +350,17 @@ const Canvas = ({ roomCode }) => {
       requestAnimationFrame(loop);
     });
 
-    // Set up initial state
-    store.setupCanvasSync();
+    yStrokes.observe(handleStrokeAdded);
+    provider.on('sync', loadExistingStrokes);
+
+    loadExistingStrokes();
 
     return () => {
+      yStrokes.unobserve(handleStrokeAdded);
+      provider.off('sync', loadExistingStrokes);
       cancelAnimationFrame(animationFrame);
     };
-  }, [ctx, store]);
+  }, [ctx, currentStroke, cursorPosition, showCursor, isDrawing, useHandTracking, awareness, yStrokes, provider, ydoc.clientID]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -246,6 +426,37 @@ const Canvas = ({ roomCode }) => {
     };
   }, [isResizing, selectedTextbox]);
 
+  useEffect(() => {
+    if (!provider?.ws) return;
+
+    const handleMessage = (event) => {
+      try {
+        // Skip binary messages
+        if (event.data instanceof ArrayBuffer) return;
+
+        const data = JSON.parse(event.data);
+        if (data.type === 'generatedImage') {
+          setGeneratedImages(prev => [
+            ...prev,
+            {
+              src: `data:${data.mimeType};base64,${data.data}`,
+              alt: 'AI enhanced artwork',
+              timestamp: Date.now()
+            }
+          ]);
+          setIsGenerating(false);
+        }
+      } catch (error) {
+        if (!(event.data instanceof ArrayBuffer)) {
+          console.error('Error handling WebSocket message:', error);
+        }
+      }
+    };
+
+    provider.ws.addEventListener('message', handleMessage);
+    return () => provider.ws.removeEventListener('message', handleMessage);
+  }, [provider]);
+
   const addTextbox = () => {
     const centerX = canvasRef.current.width / 2;
     const centerY = canvasRef.current.height / 2;
@@ -291,34 +502,86 @@ const Canvas = ({ roomCode }) => {
     dragStartPos.current = { x: e.clientX, y: e.clientY };
   };
 
-  // Add this ref to track latest state
-  const currentLineRef = useRef(store.currentLine);
-  const cursorPositionRef = useRef(store.cursorPosition);
+  const addStrokeToBackground = (stroke) => {
+    const smoothedStroke = smoothStroke(stroke);
+    const newStroke = {
+      id: crypto.randomUUID(),
+      points: smoothedStroke,
+      color: strokeColorRef.current,
+      width: ((darkMode && strokeColorRef.current === '#111827') || (!darkMode && strokeColorRef.current === 'white') ? linewidthRef.current * 10 : linewidthRef.current)
+    };
 
-  // Update ref when state changes
-  useEffect(() => {
-    currentLineRef.current = store.currentLine;
-  }, [store.currentLine]);
+    yStrokes.push([newStroke]);
+
+    return smoothedStroke;
+  };
+
+  const smoothStroke = (points, iterations = 12) => {
+    return points;
+  }
 
   const startDrawing = (e) => {
     if (useHandTracking) return;
-    store.setIsDrawing(true);
+    setIsDrawing(true);
     const point = getPointerPosition(e);
-    store.startLine(point);
+    setCurrentStroke([point]);
   };
 
   const draw = (e) => {
-    if (!store.isDrawing || useHandTracking) return;
+    if (!isDrawing || useHandTracking) return;
     const point = getPointerPosition(e);
-    store.updateLine(point);
+    setCurrentStroke(prev => [...prev, point]);
   };
 
-  const endDrawing = () => {
-    if (!store.isDrawing || useHandTracking) return;
-    if (store.currentLine && store.currentLine.points.length > 0) {
-      store.completeLine();
+  const compressStroke = (points) => {
+    if (points.length <= 2) return points;
+
+    const tolerance = 2;
+    const result = [points[0]];
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const prev = result[result.length - 1];
+      const current = points[i];
+      const next = points[i + 1];
+
+      const dx1 = current.x - prev.x;
+      const dy1 = current.y - prev.y;
+      const dx2 = next.x - current.x;
+      const dy2 = next.y - current.y;
+
+      const angle1 = Math.atan2(dy1, dx1);
+      const angle2 = Math.atan2(dy2, dx2);
+      const angleDiff = Math.abs(angle1 - angle2);
+
+      if (angleDiff > tolerance * 0.1 ||
+          Math.sqrt(dx1*dx1 + dy1*dy1) > tolerance * 5) {
+        result.push(current);
+      }
     }
-    store.setIsDrawing(false);
+
+    result.push(points[points.length - 1]);
+    return result;
+  }
+
+  const endDrawing = () => {
+    if (!isDrawing || useHandTracking) return;
+    if (currentStrokeRef.current.length > 0) {
+      const compressedStroke = compressStroke(currentStrokeRef.current);
+      // First add stroke to background
+      addStrokeToBackground(compressedStroke);
+      // Then emit the stroke data as a custom event
+      const strokeEndEvent = new CustomEvent('strokeEnd', {
+        detail: {
+          points: compressedStroke,
+          color: strokeColorRef.current,
+          width: ((darkMode && strokeColorRef.current === '#111827') || (!darkMode && strokeColorRef.current === 'white') ? linewidthRef.current * 10 : linewidthRef.current)
+        }
+      });
+      canvasRef.current.dispatchEvent(strokeEndEvent);
+    }
+    setCurrentStroke([]);
+    currentStrokeRef.current = [];
+    setIsDrawing(false);
   };
 
   const getPointerPosition = (e) => {
@@ -350,152 +613,129 @@ const Canvas = ({ roomCode }) => {
     setIsHandReady(true);
 
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();  // We need this for correct positioning
     const scaleX = canvas.width / 640;
     const scaleY = canvas.height / 480;
-
-    // Mirror the x coordinate and account for canvas position
-    const rawX = canvas.width - (handData.position.x * scaleX);
+    const rawX = canvas.width - handData.position.x * scaleX;
     const rawY = handData.position.y * scaleY;
-    
-    // Adjust for canvas position in viewport (this was missing!)
-    const x = rawX - rect.left;
-    const y = rawY - rect.top;
 
-    const smoothedPosition = smoothCursorPosition({ x, y });
-
-    store.updateCursorPosition(smoothedPosition);
-    store.setShowCursor(true);
+    const smoothedPosition = smoothCursorPosition({ x: rawX, y: rawY });
+    setCursorPosition(smoothedPosition);
+    setShowCursor(true);
 
     const isPinching = handData.isPinching;
     const isFist = handData.isFist;
-    const isClicking = handData.isClicking;
-    const isGen = handData.isGen;
+    const isClicking = handData.isClicking;  // From thumb-ring
+    const isGen = handData.isGen;            // From thumb-pinky
     const wasPinching = prevPinchState.current;
+    const wasClicking = wasClickingRef.current;
 
+    // Handle fist gesture for clearing canvas
     if (isFist) {
       clearCanvas();
       return;
     }
 
-    if (!isClicking && wasClickingRef.current) {
+    // Handle color cycling with thumb-ring
+    if (!isClicking && wasClicking) {
       cycleColor();
     }
     wasClickingRef.current = isClicking;
 
+    // Handle generation with thumb-pinky
     if (isGen && !isGenerating) {
       generateImage();
     }
-    if (isPinching && !wasPinching) {
-      store.setIsDrawing(true);
-      store.startLine(smoothedPosition);
 
+    // Handle drawing with pinch gesture
+    if (isPinching && !wasPinching) {
+      setIsDrawing(true);
+      setCurrentStroke([smoothedPosition]);
     } else if (isPinching && wasPinching) {
-      const prevPoint = currentLineRef.current?.points[currentLineRef.current.points.length - 1];
-      if (!prevPoint) return;
-      
       const maxDistance = 100;
+      let shouldAddPoint = true;
       const threshold = 5;
 
-      const distance = Math.sqrt(
-        Math.pow(prevPoint.x - smoothedPosition.x, 2) +
-        Math.pow(prevPoint.y - smoothedPosition.y, 2)
-      );
+      if (currentStrokeRef.current.length > 0) {
+        const prevPoint = currentStrokeRef.current[currentStrokeRef.current.length - 1];
+        const distance = Math.sqrt(
+          Math.pow(prevPoint.x - smoothedPosition.x, 2) +
+          Math.pow(prevPoint.y - smoothedPosition.y, 2)
+        );
 
-      if (distance > threshold && distance < maxDistance) {
         const speedFactor = Math.min(distance / maxDistance, 1);
         const adaptiveSmoothedPosition = {
           x: prevPoint.x + (smoothedPosition.x - prevPoint.x) * speedFactor,
           y: prevPoint.y + (smoothedPosition.y - prevPoint.y) * speedFactor
         };
-        store.updateLine(adaptiveSmoothedPosition);
+
+        if (distance > maxDistance || distance < threshold) {
+          shouldAddPoint = false;
+        } else if (shouldAddPoint) {
+          setCurrentStroke(prev => [...prev, adaptiveSmoothedPosition]);
+        }
       }
     } else if (!isPinching && wasPinching) {
-      if (currentLineRef.current && currentLineRef.current.points.length > 0) {
-        store.completeLine();
+      if (currentStrokeRef.current.length > 0) {
+        const compressedStroke = compressStroke(currentStrokeRef.current);
+        addStrokeToBackground(compressedStroke);
+
+        // Emit stroke end event for hand-drawn strokes
+        const strokeEndEvent = new CustomEvent('strokeEnd', {
+          detail: {
+            points: compressedStroke,
+            color: strokeColorRef.current,
+            width: ((strokeColorRef.current === 'white' || strokeColorRef.current==='#111827')? linewidthRef.current * 10 : linewidthRef.current)
+          }
+        });
+        canvasRef.current.dispatchEvent(strokeEndEvent);
       }
-      store.setIsDrawing(false);
+
+      setCurrentStroke([]);
+      setIsDrawing(false);
     }
 
     prevPinchState.current = isPinching;
   };
 
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!useHandTracking) {  // Only track mouse when hand tracking is off
-        console.log('here');
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        // Update awareness with mouse position
-        store.updateAwareness({
-          cursor: { x, y },
-          isDrawing: store.isDrawing,
-          user: {
-            id: store.clientID,
-            name: userName,
-            color: strokeColorRef.current
-          }
-        });
-      }
-    };
-
-    const handleMouseLeave = () => {
-      if (!useHandTracking) {
-        store.clearAwareness();
-      }
-    };
-
-    if (canvasRef.current) {
-      canvasRef.current.addEventListener('mousemove', handleMouseMove);
-      canvasRef.current.addEventListener('mouseleave', handleMouseLeave);
-    }
-
-    return () => {
-      if (canvasRef.current) {
-        canvasRef.current.removeEventListener('mousemove', handleMouseMove);
-        canvasRef.current.removeEventListener('mouseleave', handleMouseLeave);
-      }
-    };
-  }, [store.isDrawing, useHandTracking, userName, store.clientID]);
-
-  useEffect(() => {
-    const updateLocalAwareness = () => {
-      if (useHandTracking && isHandReady) {
-        store.updateAwareness({
-          cursor: store.cursorPosition,
-          isDrawing: store.isDrawing,
-          user: {
-            id: store.clientID,
-            name: userName,
-            color: strokeColorRef.current
-          }
-        });
-      }
-    };
-
-    updateLocalAwareness();
-  }, [awareness, store.cursorPosition, isHandReady, useHandTracking, store.isDrawing, userName, store.clientID]);
-
   const toggleHandTracking = () => {
     setUseHandTracking(prev => !prev);
-    store.setIsDrawing(false);
+    setIsDrawing(false);
     setCurrentStroke([]);
-    store.setShowCursor(false);
+    setShowCursor(false);
   };
 
   const clearCanvas = () => {
-    store.clearCanvas();
+    ydoc.transact(() => {
+      yStrokes.delete(0, yStrokes.length);
+    });
+
+    const bgCtx = bgCanvasRef.current.getContext('2d');
+    bgCtx.clearRect(0, 0, bgCanvasRef.current.width, bgCanvasRef.current.height);
+    setCurrentStroke([]);
+    setIsDrawing(false);
   };
+
 
   const generateImage = async () => {
     if (!canvasRef.current) return;
     setIsGenerating(true);
 
     try {
-      // Get all strokes from the store
-      const allStrokes = store.getStrokesForExport();
+      // Get all strokes
+      const allStrokes = yStrokes.toArray().map(stroke => {
+        const strokeData = Array.isArray(stroke) ? stroke[0] : stroke;
+        console.log('Processing stroke:', {
+          hasPoints: !!strokeData.points,
+          pointCount: strokeData.points?.length,
+          color: strokeData.color,
+          width: strokeData.width
+        });
+        return {
+          points: strokeData.points,
+          color: strokeData.color,
+          width: strokeData.width
+        };
+      });
 
       console.log('Sending generation request:', {
         strokeCount: allStrokes.length,
@@ -582,7 +822,6 @@ const Canvas = ({ roomCode }) => {
               onClick={() => {
                 strokeColorRef.current = color;
                 setCurrentColorIndex(index);
-                store.setColor(color);
               }}
               aria-label={color}
             />
@@ -618,11 +857,11 @@ const Canvas = ({ roomCode }) => {
             name="linewidth"
             min="2"
             max="10"
-            value={store.penSize}
+            value={lineWidth}
             onChange={(e) => {
               const newWidth = Math.max(2, Math.min(10, parseInt(e.target.value)));
               linewidthRef.current = newWidth;
-              store.setPenSize(newWidth);
+              setLineWidth(newWidth);
               setCtx((prevCtx) => {
                 if (prevCtx) {
                   prevCtx.lineWidth = newWidth;
@@ -643,8 +882,8 @@ const Canvas = ({ roomCode }) => {
               }`}
             style={{
               background: darkMode
-                ? `linear-gradient(to right, #ffffff 0%, #ffffff ${((store.penSize - 2) / 8) * 100}%, #4B5563 ${((store.penSize - 2) / 8) * 100}%, #4B5563 100%)`
-                : `linear-gradient(to right, #000000 0%, #000000 ${((store.penSize - 2) / 8) * 100}%, #ccc ${((store.penSize - 2) / 8) * 100}%, #ccc 100%)`
+                ? `linear-gradient(to right, #ffffff 0%, #ffffff ${((lineWidth - 2) / 8) * 100}%, #4B5563 ${((lineWidth - 2) / 8) * 100}%, #4B5563 100%)`
+                : `linear-gradient(to right, #000000 0%, #000000 ${((lineWidth - 2) / 8) * 100}%, #ccc ${((lineWidth - 2) / 8) * 100}%, #ccc 100%)`
             }}
           />
       </div>
@@ -668,8 +907,8 @@ const Canvas = ({ roomCode }) => {
         </div>
 
         <div className='absolute top-2 right-4 hidden sm:flex gap-2 items-center'>
-          {store.awarenessStates
-            .filter(([_, state]) => state?.user?.name && state?.user?.color)
+          {Array.from(awareness.getStates())
+            .filter(([_, state]) => state.user?.name && state.user?.color)
             .map(([clientID, state]) => (
               <p
                 key={clientID}
@@ -713,7 +952,7 @@ const Canvas = ({ roomCode }) => {
           <AdvancedFeatures
             canvasRef={canvasRef}
             bgCanvasRef={bgCanvasRef}
-            ydoc={store.getYjsResources().ydoc}
+            ydoc={ydoc}
             awareness={awareness}
           />
         </div>

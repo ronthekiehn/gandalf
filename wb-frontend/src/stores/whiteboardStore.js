@@ -14,7 +14,7 @@ const useWhiteboardStore = create((set, get) => ({
   currentLine: null,
   selectedTool: 'pen',
   penColor: 'black',
-  penSize: 3,
+  penSize: 4,
   cursorPosition: { x: 0, y: 0 },
   showCursor: false,
   isDrawing: false,
@@ -23,6 +23,13 @@ const useWhiteboardStore = create((set, get) => ({
   isConnected: false,
   clientID: null,
   awarenessStates: [],
+  
+  // Add undo/redo stacks
+  undoStack: [],
+  redoStack: [],
+  
+  // Add a map to track local vs remote strokes
+  localStrokes: new Map(),
   
   // Initialize Y.js connection
   initializeYjs: (roomCode, userName) => {
@@ -54,19 +61,49 @@ const useWhiteboardStore = create((set, get) => ({
       set({ isConnected: status === 'connected' });
       
       if (status === 'connected') {
-        const currentStrokes = yStrokes.toArray();
-        console.log('Initial strokes:', currentStrokes);
+        const state = get();
+        // Clear existing state
+        state.clearBgCanvas();
+        state.localStrokes.clear();
+        
+        // Load all strokes from Y.js
+        const currentStrokes = yStrokes.toArray();        
+        // Process each stroke
         currentStrokes.forEach(strokeData => {
           const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
           if (stroke && stroke.points) {
+            if (stroke.clientID === ydoc.clientID) {
+              // If it's our stroke, store it locally uncompressed
+              state.localStrokes.set(stroke.id, stroke);
+            }
             get().drawStrokeOnBg(stroke);
           }
         });
       }
     });
     
-    // Handle new strokes from other clients
+    // Handle new strokes and deletions from other clients
     yStrokes.observe(event => {
+      // Handle deleted strokes
+      if (event.changes.deleted && event.changes.deleted.size > 0) {
+        // Clear and redraw everything when strokes are deleted
+        const state = get();
+        state.clearBgCanvas();
+        
+        // Redraw all remaining strokes
+        yStrokes.toArray().forEach(item => {
+          const stroke = Array.isArray(item) ? item[0] : item;
+          if (stroke && stroke.points) {
+            if (stroke.clientID === ydoc.clientID) {
+              state.localStrokes.set(stroke.id, stroke);
+            }
+            get().drawStrokeOnBg(stroke);
+          }
+        });
+        return;
+      }
+
+      // Handle added strokes
       event.changes.added.forEach(item => {
         let content;
         if (item.content && item.content.getContent) {
@@ -80,7 +117,8 @@ const useWhiteboardStore = create((set, get) => ({
         
         content.forEach(strokeData => {
           const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
-          if (stroke && stroke.points) {
+          // Only process remote strokes
+          if (stroke && stroke.points && stroke.clientID !== ydoc.clientID) {
             get().drawStrokeOnBg(stroke);
             get().importLines([stroke]);
           }
@@ -139,6 +177,7 @@ const useWhiteboardStore = create((set, get) => ({
   startLine: (point) => set(state => ({
     currentLine: {
       id: Date.now().toString(),
+      clientID: ydoc?.clientID,  // Add clientID to stroke
       points: [point],
       toolType: state.selectedTool,
       color: state.penColor,
@@ -149,46 +188,144 @@ const useWhiteboardStore = create((set, get) => ({
   
   updateLine: (point) => set(state => {
     if (!state.currentLine) return state;
+    // Get the last point
+    const lastPoint = state.currentLine.points[state.currentLine.points.length - 1];
+    
+    // If this is a hand tracking point, apply smoothing
+    if (point.fromHandTracking) {
+      const maxDistance = 100;
+      const threshold = 5;
+      
+      const distance = Math.sqrt(
+        Math.pow(lastPoint.x - point.x, 2) +
+        Math.pow(lastPoint.y - point.y, 2)
+      );
+      
+      // Skip update if point is too close or too far
+      if (distance < threshold || distance > maxDistance) {
+        return state;
+      }
+      
+      // Apply adaptive smoothing
+      const speedFactor = Math.min(distance / maxDistance, 1);
+      point = {
+        x: lastPoint.x + (point.x - lastPoint.x) * speedFactor,
+        y: lastPoint.y + (point.y - lastPoint.y) * speedFactor
+      };
+    }
+    
     return {
-      currentLine: { 
-        ...state.currentLine, 
-        points: [...state.currentLine.points, point] 
+      currentLine: {
+        ...state.currentLine,
+        points: [...state.currentLine.points, point]
       }
     };
   }),
-  
+
   completeLine: () => {
     const state = get();
     if (!state.currentLine) return set({ isDrawing: false });
     
-    const processedStroke = state.currentLine.points.length > 2 
-      ? {
-          ...state.currentLine,
-          points: get().compressStroke(state.currentLine.points)
-        }
-      : state.currentLine;
+    // Keep track of this local stroke
+    state.localStrokes.set(state.currentLine.id, state.currentLine);
     
-    // Add to Y.js if connected
+    // Draw the uncompressed stroke to background
+    get().drawStrokeOnBg(state.currentLine);
+    
+    // Add compressed version to Y.js if connected
     if (yStrokes) {
-      console.log('Adding stroke to Y.js:', processedStroke);
       try {
-        yStrokes.push([{
-          points: processedStroke.points,
-          color: processedStroke.color,
-          width: processedStroke.width
-        }]);
+        const compressedStroke = {
+          points: get().compressStroke(state.currentLine.points),
+          color: state.currentLine.color,
+          width: state.currentLine.width,
+          clientID: state.currentLine.clientID,
+          id: state.currentLine.id
+        };
+        yStrokes.push([compressedStroke]);
       } catch (err) {
         console.error('Failed to push stroke to Y.js:', err);
       }
     }
     
     set({
-      lines: [...state.lines, processedStroke],
+      lines: [...state.lines, state.currentLine],
       currentLine: null,
       isDrawing: false
     });
   },
   
+  // Add undo/redo methods
+  undo: () => {
+    const state = get();
+    const currentClientID = ydoc?.clientID;
+    
+    // Find the most recent stroke by this client
+    const strokeIndex = state.undoStack.findLastIndex(
+      stroke => stroke.clientID === currentClientID
+    );
+    
+    if (strokeIndex === -1) return;
+    
+    // Remove the stroke from undoStack and add to redoStack
+    const strokeToUndo = state.undoStack[strokeIndex];
+    const newUndoStack = [
+      ...state.undoStack.slice(0, strokeIndex),
+      ...state.undoStack.slice(strokeIndex + 1)
+    ];
+    
+    // Remove from Y.js
+    if (yStrokes) {
+      const yStrokeIndex = yStrokes.toArray().findIndex(
+        stroke => (Array.isArray(stroke) ? stroke[0] : stroke).id === strokeToUndo.id
+      );
+      if (yStrokeIndex !== -1) {
+        yStrokes.delete(yStrokeIndex, 1);
+      }
+    }
+    
+    // Redraw background
+    get().clearBgCanvas();
+    newUndoStack.forEach(stroke => get().drawStrokeOnBg(stroke));
+    
+    set(state => ({
+      undoStack: newUndoStack,
+      redoStack: [...state.redoStack, strokeToUndo]
+    }));
+  },
+
+  redo: () => {
+    const state = get();
+    const currentClientID = ydoc?.clientID;
+    
+    // Find the most recent stroke by this client in the redo stack
+    const strokeIndex = state.redoStack.findLastIndex(
+      stroke => stroke.clientID === currentClientID
+    );
+    
+    if (strokeIndex === -1) return;
+    
+    // Remove the stroke from redoStack and add back to undoStack
+    const strokeToRedo = state.redoStack[strokeIndex];
+    const newRedoStack = [
+      ...state.redoStack.slice(0, strokeIndex),
+      ...state.redoStack.slice(strokeIndex + 1)
+    ];
+    
+    // Add back to Y.js
+    if (yStrokes) {
+      yStrokes.push([strokeToRedo]);
+    }
+    
+    // Redraw the stroke
+    get().drawStrokeOnBg(strokeToRedo);
+    
+    set(state => ({
+      redoStack: newRedoStack,
+      undoStack: [...state.undoStack, strokeToRedo]
+    }));
+  },
+
   // Tool settings
   setTool: (tool) => set({ selectedTool: tool }),
   setColor: (color) => set({ penColor: color }),
@@ -210,13 +347,20 @@ const useWhiteboardStore = create((set, get) => ({
     
     // Clear Y.js array if connected
     if (yStrokes) {
-      yStrokes.delete(0, yStrokes.length);
+      // Use transact to batch the deletion
+      ydoc.transact(() => {
+        yStrokes.delete(0, yStrokes.length);
+      });
     }
+    
+    state.localStrokes.clear();
     
     return set({ 
       lines: [], 
       currentLine: null,
-      isDrawing: false 
+      isDrawing: false,
+      undoStack: [],
+      redoStack: []
     });
   },
   
@@ -259,13 +403,29 @@ const useWhiteboardStore = create((set, get) => ({
   
   // Background canvas management
   bgCanvas: null,
-  setBgCanvas: (canvas) => set({ bgCanvas: canvas }),
+  setBgCanvas: (canvas) => {
+    const width = window.innerWidth;
+    const height = window.innerHeight - 48;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    
+    ctx.scale(dpr, dpr);
+    
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    
+    set({ bgCanvas: canvas });
+  },
   
   // Stroke rendering
   renderStroke: (stroke, targetCtx) => {
     if (!stroke || !stroke.points || stroke.points.length === 0) return;
-
     targetCtx.save();
+    const dpr = window.devicePixelRatio || 1;
+    targetCtx.scale(dpr, dpr);
     targetCtx.strokeStyle = stroke.color || 'black';
     targetCtx.lineWidth = stroke.width;
     targetCtx.beginPath();
@@ -291,8 +451,8 @@ const useWhiteboardStore = create((set, get) => ({
   drawStrokeOnBg: (stroke) => {
     const state = get();
     if (!state.bgCanvas) return;
-    
     const bgCtx = state.bgCanvas.getContext('2d');
+
     state.renderStroke(stroke, bgCtx);
   },
 
@@ -300,20 +460,22 @@ const useWhiteboardStore = create((set, get) => ({
   setupCanvasSync: () => {
     if (!yStrokes) return;
     
-    // Handle initial state
-    const currentStrokes = yStrokes.toArray();
-    currentStrokes.forEach(strokeData => {
-      const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
-      if (stroke && stroke.points) {
-        get().drawStrokeOnBg(stroke);
-      }
-    });
-    
-    // Provider sync handler
+    // Provider sync handler - only redraw remote strokes
     provider?.on('sync', () => {
+      const state = get();
+      // Clear canvas
       get().clearBgCanvas();
-      yStrokes.forEach(item => {
-        const stroke = Array.isArray(item) ? item[0] : item;
+      
+      // First draw all remote strokes
+      yStrokes.toArray().forEach(item => {
+        const strokeData = Array.isArray(item) ? item[0] : item;
+        if (strokeData && strokeData.clientID !== ydoc.clientID) {
+          get().drawStrokeOnBg(strokeData);
+        }
+      });
+      
+      // Then draw local strokes (uncompressed)
+      state.localStrokes.forEach(stroke => {
         get().drawStrokeOnBg(stroke);
       });
     });

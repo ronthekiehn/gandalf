@@ -43,7 +43,7 @@ const Canvas = ({ roomCode }) => {
   const prevPinchState = useRef(false);
   const currentStrokeRef = useRef([]);
   const cursorHistoryRef = useRef([]);
-  const cursorHistorySize = 2;
+  const cursorHistorySize = 1;
   const wasClickingRef = useRef(false);
   const [darkMode, setDarkMode] = useState(false);
   const [generatedImages, setGeneratedImages] = useState([]);
@@ -81,31 +81,41 @@ const Canvas = ({ roomCode }) => {
   useEffect(() => {
     const canvas = document.createElement('canvas');
     canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight - 70;
+    canvas.height = window.innerHeight - 48;
     store.setBgCanvas(canvas);
     bgCanvasRef.current = canvas;
   }, []);
 
   useEffect(() => {
+    const setupCanvas = (canvas, context) => {
+      const width = window.innerWidth;
+      const height = window.innerHeight - 48;
+      const dpr = window.devicePixelRatio || 1;
+      
+      // Reset any previous transforms
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      
+
+      // Set up drawing settings
+      context.lineJoin = 'round';
+      context.lineCap = 'round';
+      context.lineWidth = linewidthRef.current;
+      context.strokeStyle = strokeColorRef.current;
+    };
+
     const canvas = canvasRef.current;
+    const bgCanvas = bgCanvasRef.current;
     const context = canvas.getContext('2d');
+    const bgContext = bgCanvas.getContext('2d');
 
     const resizeCanvas = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight - 70;
-
-      canvas.width = width;
-      canvas.height = height;
-
-      bgCanvasRef.current.width = width;
-      bgCanvasRef.current.height = height;
-
-      [context, bgCanvasRef.current.getContext('2d')].forEach(ctx => {
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.lineWidth = linewidthRef.current;
-        ctx.strokeStyle = strokeColorRef.current;
-      });
+      setupCanvas(canvas, context);
+      setupCanvas(bgCanvas, bgContext);
     };
 
     resizeCanvas();
@@ -126,27 +136,31 @@ const Canvas = ({ roomCode }) => {
     cursorPositionRef.current = store.cursorPosition;
   }, [store.cursorPosition]);
 
+
   useEffect(() => {
     if (!ctx || !bgCanvasRef.current) return;
 
     const renderCanvas = () => {
-      const { cursorPosition, showCursor, isDrawing, currentLine } = store;
+      const currentState = useWhiteboardStore.getState();
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.drawImage(bgCanvasRef.current, 0, 0);
-
-      if (currentLine) {
-        store.renderStroke(currentLine, ctx);
+      if (currentState.currentLine) {
+        store.renderStroke(currentState.currentLine, ctx);
       }
 
-      // Draw other users' cursors
-      store.awarenessStates.forEach(([clientID, state]) => {
-        if (state.cursor && clientID !== store.clientID) {
+      // Draw other users' cursors using the current state snapshot
+      currentState.awarenessStates.forEach(([clientID, state]) => {
+        if (state.cursor && clientID !== currentState.clientID) {
+          console.log("here")
           ctx.save();
+          const dpr = window.devicePixelRatio || 1;
+          ctx.scale(dpr, dpr);
 
           ctx.fillStyle = state.isDrawing ? state.user.color : 'gray';
           ctx.beginPath();
           ctx.arc(state.cursor.x, state.cursor.y, 10, 0, 2 * Math.PI);
           ctx.fill();
+
 
           ctx.font = '14px Arial';
           ctx.fillStyle = 'white';
@@ -159,9 +173,11 @@ const Canvas = ({ roomCode }) => {
         }
       });
 
-      if (showCursor && useHandTracking) {
+      if (currentState.showCursor && useHandTracking) {
         ctx.save();
-        ctx.fillStyle = store.isDrawing ? strokeColorRef.current : 'gray';
+        const dpr = window.devicePixelRatio || 1;
+        ctx.scale(dpr, dpr);
+        ctx.fillStyle = currentState.isDrawing ? strokeColorRef.current : 'gray';
         ctx.beginPath();
         ctx.arc(cursorPositionRef.current.x, cursorPositionRef.current.y, 10, 0, 2 * Math.PI);
         ctx.fill();
@@ -180,7 +196,7 @@ const Canvas = ({ roomCode }) => {
     return () => {
       cancelAnimationFrame(animationFrame);
     };
-  }, [ctx, store]);
+  }, [ctx, useHandTracking]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -302,7 +318,6 @@ const Canvas = ({ roomCode }) => {
 
   const startDrawing = (e) => {
     if (useHandTracking) return;
-    store.setIsDrawing(true);
     const point = getPointerPosition(e);
     store.startLine(point);
   };
@@ -318,7 +333,6 @@ const Canvas = ({ roomCode }) => {
     if (store.currentLine && store.currentLine.points.length > 0) {
       store.completeLine();
     }
-    store.setIsDrawing(false);
   };
 
   const getPointerPosition = (e) => {
@@ -330,35 +344,59 @@ const Canvas = ({ roomCode }) => {
   };
 
   const smoothCursorPosition = (newPosition) => {
-    cursorHistoryRef.current.push(newPosition);
-    if (cursorHistoryRef.current.length > cursorHistorySize) {
-      cursorHistoryRef.current.shift();
-    }
 
-    const smoothedPosition = cursorHistoryRef.current.reduce(
+    if (cursorHistoryRef.current.length === 0) {
+      cursorHistoryRef.current.push(newPosition);
+      return newPosition;
+    }
+    const lastPos = cursorHistoryRef.current[cursorHistoryRef.current.length - 1];
+
+    const newAvg = [...cursorHistoryRef.current, newPosition]
+    // Accumulate the total x and y values
+    const smoothedPosition = newAvg.reduce(
       (acc, pos) => ({
-        x: acc.x + pos.x / cursorHistoryRef.current.length,
-        y: acc.y + pos.y / cursorHistoryRef.current.length
+        x: acc.x + pos.x,
+        y: acc.y + pos.y
       }),
       { x: 0, y: 0 }
     );
+
+    // Divide by the length of the array to get the average
+    smoothedPosition.x /= newAvg.length;
+    smoothedPosition.y /= newAvg.length;
+
+    // if the new position is less than 2 pixels away from the previous position, return the previous position
+    if (Math.abs(smoothedPosition.x - lastPos.x) < 2){
+      smoothedPosition.x = lastPos.x;
+    }
+    if (Math.abs(smoothedPosition.y - lastPos.y) < 2) {
+      smoothedPosition.y = lastPos.y;
+    }
+    // Limit the size of the cursor history
+    if (cursorHistoryRef.current.length >= cursorHistorySize) {
+      cursorHistoryRef.current.shift(); 
+    }
+    cursorHistoryRef.current.push(smoothedPosition);
     return smoothedPosition;
-  };
+};
 
   const handleHandUpdate = (handData) => {
     if (!handData || !canvasRef.current) return;
     setIsHandReady(true);
 
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();  // We need this for correct positioning
-    const scaleX = canvas.width / 640;
-    const scaleY = canvas.height / 480;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
 
-    // Mirror the x coordinate and account for canvas position
-    const rawX = canvas.width - (handData.position.x * scaleX);
+    // Calculate scale factors considering both canvas size and DPR
+    const scaleX = (canvas.width / dpr) / 640;  // 640 is the video width
+    const scaleY = (canvas.height / dpr) / 480;  // 480 is the video height
+
+    // Mirror the x coordinate and scale it
+    const rawX = (canvas.width / dpr) - (handData.position.x * scaleX);
     const rawY = handData.position.y * scaleY;
     
-    // Adjust for canvas position in viewport (this was missing!)
+    // Convert to canvas coordinates
     const x = rawX - rect.left;
     const y = rawY - rect.top;
 
@@ -370,8 +408,7 @@ const Canvas = ({ roomCode }) => {
     const isPinching = handData.isPinching;
     const isFist = handData.isFist;
     const isClicking = handData.isClicking;
-    const isGen = handData.isGen;
-    const wasPinching = prevPinchState.current;
+    const isGen = false;
 
     if (isFist) {
       clearCanvas();
@@ -386,35 +423,15 @@ const Canvas = ({ roomCode }) => {
     if (isGen && !isGenerating) {
       generateImage();
     }
-    if (isPinching && !wasPinching) {
-      store.setIsDrawing(true);
+    if (isPinching && !prevPinchState.current) {
       store.startLine(smoothedPosition);
 
-    } else if (isPinching && wasPinching) {
-      const prevPoint = currentLineRef.current?.points[currentLineRef.current.points.length - 1];
-      if (!prevPoint) return;
-      
-      const maxDistance = 100;
-      const threshold = 5;
-
-      const distance = Math.sqrt(
-        Math.pow(prevPoint.x - smoothedPosition.x, 2) +
-        Math.pow(prevPoint.y - smoothedPosition.y, 2)
-      );
-
-      if (distance > threshold && distance < maxDistance) {
-        const speedFactor = Math.min(distance / maxDistance, 1);
-        const adaptiveSmoothedPosition = {
-          x: prevPoint.x + (smoothedPosition.x - prevPoint.x) * speedFactor,
-          y: prevPoint.y + (smoothedPosition.y - prevPoint.y) * speedFactor
-        };
-        store.updateLine(adaptiveSmoothedPosition);
-      }
-    } else if (!isPinching && wasPinching) {
+    } else if (isPinching && prevPinchState.current) {
+      store.updateLine({...smoothedPosition,  fromHandTracking: true });
+    } else if (!isPinching && prevPinchState.current) {
       if (currentLineRef.current && currentLineRef.current.points.length > 0) {
         store.completeLine();
       }
-      store.setIsDrawing(false);
     }
 
     prevPinchState.current = isPinching;
@@ -422,8 +439,7 @@ const Canvas = ({ roomCode }) => {
 
   useEffect(() => {
     const handleMouseMove = (e) => {
-      if (!useHandTracking) {  // Only track mouse when hand tracking is off
-        console.log('here');
+      if (!useHandTracking) { 
         const rect = canvasRef.current.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -478,11 +494,12 @@ const Canvas = ({ roomCode }) => {
     updateLocalAwareness();
   }, [awareness, store.cursorPosition, isHandReady, useHandTracking, store.isDrawing, userName, store.clientID]);
 
+
   const toggleHandTracking = () => {
     setUseHandTracking(prev => !prev);
     store.setIsDrawing(false);
     setCurrentStroke([]);
-    store.setShowCursor(false);
+    store.setShowCrsor(false);
   };
 
   const clearCanvas = () => {
@@ -496,11 +513,6 @@ const Canvas = ({ roomCode }) => {
     try {
       // Get all strokes from the store
       const allStrokes = store.getStrokesForExport();
-
-      console.log('Sending generation request:', {
-        strokeCount: allStrokes.length,
-        timestamp: new Date().toISOString()
-      });
 
       const response = await fetch('https://ws.ronkiehn.dev/generate', {
         method: 'POST',
@@ -519,12 +531,6 @@ const Canvas = ({ roomCode }) => {
       }
 
       const result = await response.json();
-      console.log('Generation result:', {
-        success: true,
-        imageCount: result.images?.length,
-        hasText: !!result.text,
-        timestamp: new Date().toISOString()
-      });
 
       if (result.images?.length) {
         setGeneratedImages(prev => [

@@ -3,13 +3,15 @@ import { create } from 'zustand';
 const useUIStore = create((set) => ({
   // UI state
   darkMode: false,
-  showWebcam: false,
-  sidebarOpen: false,
+  useHandTracking: false,
   
   // UI actions
   toggleDarkMode: () => set(state => ({ darkMode: !state.darkMode })),
-  toggleWebcam: () => set(state => ({ showWebcam: !state.showWebcam })),
-  toggleSidebar: () => set(state => ({ sidebarOpen: !state.sidebarOpen }))
+  toggleHandTracking: () => set(state => {
+    const newValue = !state.useHandTracking;
+    return { useHandTracking: newValue };
+  }),
+  setHandTracking: (value) => set({ useHandTracking: value }),
 }));
 
 export default useUIStore;

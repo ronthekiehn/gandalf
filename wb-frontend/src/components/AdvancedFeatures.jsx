@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useContext } from 'react';
-import { DarkModeContext } from '../contexts/DarkModeContext';
 import { Triangle, Moon, Sun } from 'lucide-react';
+import useUIStore from '../stores/uiStore';
 
 const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
   const [chatMessages, setChatMessages] = useState([]);
@@ -8,7 +8,8 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
   const [miniMapVisible, setMiniMapVisible] = useState(false);
   const [shapeRecognitionEnabled, setShapeRecognitionEnabled] = useState(false);
   const miniMapRef = useRef(null);
-  const { darkMode, setDarkMode } = useContext(DarkModeContext);
+  const {  darkMode } = useUIStore();
+
 
   const findTriangleVertices = (points) => {
     let vertices = [];

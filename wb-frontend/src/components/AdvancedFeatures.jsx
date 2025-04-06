@@ -242,12 +242,7 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
   };
 
   // Export canvas as PNG
-  const exportAsPNG = () => {
-    const link = document.createElement('a');
-    link.download = 'drawing.png';
-    link.href = canvasRef.current.toDataURL('image/png');
-    link.click();
-  };
+
 
   // Import image as reference
   const importImage = (e) => {
@@ -268,21 +263,11 @@ const AdvancedFeatures = ({ canvasRef, bgCanvasRef, ydoc, awareness }) => {
   return (
     <>
 
-        <button
-            className="text-black p-2 w-full rounded-full bg-gray-100 hover:-translate-y-0.5 transition-all duration-200 ease-in-out hover:shadow-lg cursor-pointer"
-            onClick={exportAsPNG}
-          >
-            Export as PNG
-          </button>
+   
 
 
       <div className='flex justify-around items-center'>
-      <button
-          className='cursor-pointer p-2 rounded  hover:bg-gray-100 transition-colors'
-          onClick={() => setDarkMode(prev => !prev)}
-        >
-          {darkMode ? <Sun /> : <Moon />}
-        </button>
+      
       <button
           className={`${shapeRecognitionEnabled ? 'bg-gray-200' : ''} cursor-pointer p-2 rounded hover:bg-gray-100 transition-colors`}
           onClick={() => setShapeRecognitionEnabled(prev => !prev)}

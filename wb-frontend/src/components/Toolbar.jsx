@@ -8,51 +8,41 @@ const Toolbar = () => {
   const colors = ['black', 'red', 'blue', 'green'];
 
   return (
-    <div className={`absolute bottom-4 px-3 py-2 flex gap-4 justify-between items-center shadow-lg rounded-2xl shadow-neutral-500 border ${
-      darkMode
-        ? 'bg-gray-200 text-gray-800 border-gray-300'
-        : 'bg-white text-black border-stone-300'
-    }`}>
+    <div className='absolute bottom-3 px-3 py-2 flex gap-4 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
+    bg-white text-black border-stone-300
+    dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600'>
       <button
-        className={`cursor-pointer p-2 rounded-full transition-colors ${
-          darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-        }`}
+        className='cursor-pointer p-2 rounded transition-colors
+        hover:bg-neutral-100 dark:hover:bg-neutral-700'
         onClick={toggleHandTracking}
       >
         {useHandTracking ? <Hand /> : <Mouse />}
       </button>
 
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         {colors.map((color, index) => (
           <button
             key={color}
             className={`cursor-pointer w-6 h-6 rounded-full transition-all ${
               color === store.penColor
-                ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                : 'opacity-60 hover:opacity-100'
-            } ${darkMode ? 'ring-offset-gray-800' : 'ring-offset-white'}`}
+                ? 'ring-2 ring-offset-2 ring-blue-500'
+                : 'opacity-100 hover:opacity-80'
+            } ring-offset-white dark:ring-offset-neutral-800`}
             style={{ backgroundColor: color }}
             onClick={() => store.setColor(color)}
             aria-label={color}
           />
         ))}
 
-        <button
-          className={`cursor-pointer w-6 h-6 rounded-full transition-all flex items-center justify-center ${
-            (darkMode && store.penColor === '#111827') || (!darkMode && store.penColor === 'white')
-              ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-              : 'opacity-60 hover:opacity-100'
-          } ${darkMode
-              ? 'bg-gray-600 ring-offset-gray-800'
-              : 'bg-gray-100 ring-offset-white'
-          }`}
-          onClick={() => store.setColor(darkMode ? '#111827' : 'white')}
+       
+      </div>
+      <button
+          className='cursor-pointer p-2 rounded transition-all flex items-center justify-center
+          ring-offset-white dark:ring-offset-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700'
           aria-label="Eraser"
         >
-          <Eraser size={14} color={darkMode ? "white" : "black"} />
+          <Eraser />
         </button>
-      </div>
-
       <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
         <input
           type="range"
@@ -68,8 +58,8 @@ const Toolbar = () => {
             [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border
             [&::-moz-range-thumb]:cursor-pointer
             ${darkMode
-              ? '[&::-webkit-slider-thumb]:bg-gray-300 [&::-webkit-slider-thumb]:border-gray-400 [&::-moz-range-thumb]:bg-gray-300 bg-gray-700'
-              : '[&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-gray-300 [&::-moz-range-thumb]:bg-black bg-gray-200'
+              ? '[&::-webkit-slider-thumb]:bg-neutral-900 [&::-webkit-slider-thumb]:border-white [&::-moz-range-thumb]:bg-neutral-300 bg-neutral-700'
+              : '[&::-webkit-slider-thumb]:bg-neutral-100 [&::-webkit-slider-thumb]:border-black [&::-moz-range-thumb]:bg-black bg-neutral-200'
             }`}
           style={{
             background: darkMode
@@ -80,9 +70,8 @@ const Toolbar = () => {
       </div>
 
       <button
-        className={`cursor-pointer p-2 rounded-full text-red-500 transition-colors ${
-          darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-        }`}
+        className='cursor-pointer p-2 rounded text-red-500 transition-colors
+        hover:bg-neutral-100 dark:hover:bg-neutral-700'
         onClick={() => store.clearCanvas()}
       >
         <X />

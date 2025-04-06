@@ -1,18 +1,43 @@
 import { create } from 'zustand';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
+import { drawingSmoothing } from '../utils/smoothing';
 
 // Y.js connection singleton
 let ydoc = null;
 let provider = null;
 let yStrokes = null;
+let yActiveStrokes = null;
 let awareness = null;
 
 const useWhiteboardStore = create((set, get) => ({
+  // User state
+  userName: (() => {
+    const saved = localStorage.getItem('wb-username');
+    return saved || `User-${Math.floor(Math.random() * 1000)}`;
+  })(),
+  
+  userColor: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
+
+  // Add debounced username setter
+  setUserName: (() => {
+    let timeoutId;
+    return (name) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        set({ userName: name });
+        localStorage.setItem('wb-username', name);
+      }, 500);
+    };
+  })(),
+
   // Drawing state
   lines: [],
   currentLine: null,
   selectedTool: 'pen',
+  
+
+  // Drawing state (keep separate from user state)
   penColor: 'black',
   penSize: 4,
   cursorPosition: { x: 0, y: 0 },
@@ -23,6 +48,7 @@ const useWhiteboardStore = create((set, get) => ({
   isConnected: false,
   clientID: null,
   awarenessStates: [],
+  activeUsers: [],
   
   // Add undo/redo stacks
   undoStack: [],
@@ -31,30 +57,72 @@ const useWhiteboardStore = create((set, get) => ({
   // Add a map to track local vs remote strokes
   localStrokes: new Map(),
   
+  // Add new state for remote active strokes
+  remoteActiveStrokes: [],
+
+  // Smoothing parameters
+  smoothingParams: {
+    cursorHistorySize: 1,
+    cursorDeadzone: 2,
+    drawingDeadzone: 5,
+  },
+
+  // Update smoothing parameters
+  setSmoothingParams: (newParams) => {
+    set((state) => ({
+      smoothingParams: { ...state.smoothingParams, ...newParams },
+    }));
+  },
+
+  // pinching params
+  pinchDist: 0.1,
+  setPinchDist: (dist) => set({ pinchDist: dist }),
+
+  // more hand tracking options
+  fistToClear: true,
+  setFistToClear: (value) => set({ fistToClear: value }),
+  
   // Initialize Y.js connection
   initializeYjs: (roomCode, userName) => {
     // Return early if already initialized
     if (ydoc && provider && yStrokes) return;
     
-    console.log(`Initializing Y.js with room: ${roomCode}`);
+    console.log(`Initializing Y.js with room: ${roomCode}, user: ${userName}`);
     
     // Create Y.js doc
     ydoc = new Y.Doc();
     
-    // Set up WebSocket connection
-    const wsUrl = new URL('wss://ws.ronkiehn.dev');
+    // Set up WebSocket connection with proper parameters
+    const wsUrl = new URL('ws://localhost:1234');
     wsUrl.searchParams.set('username', userName);
     wsUrl.searchParams.set('room', roomCode);
+    wsUrl.searchParams.set('type', 'awareness');
+    wsUrl.searchParams.set('color', get().userColor); // Add this line
     wsUrl.pathname = `/${roomCode}`;
+    
+    console.log('Connecting to WebSocket:', wsUrl.toString());
     
     // Create provider
     provider = new WebsocketProvider(wsUrl.toString(), roomCode, ydoc);
     yStrokes = ydoc.getArray('strokes');
+    yActiveStrokes = ydoc.getMap('activeStrokes'); // Add this
     awareness = provider.awareness;
     
     // Set client ID
     set({ clientID: ydoc.clientID });
     
+    // Add the user to the active users list
+    set((state) => ({
+      activeUsers: [
+        ...state.activeUsers,
+        {
+          clientID: ydoc.clientID,
+          userName,
+          color: get().userColor, 
+        },
+      ],
+    }));
+
     // Handle connection status changes
     provider.on('status', ({ status }) => {
       console.log(`Room ${roomCode} - WebSocket status:`, status);
@@ -81,7 +149,26 @@ const useWhiteboardStore = create((set, get) => ({
         });
       }
     });
-    
+
+    // Handle WebSocket messages for user updates
+    provider.ws.addEventListener('message', (event) => {
+      try {
+        const message = JSON.parse(event.data);        
+        if (message.type === 'active-users') {
+          set({ activeUsers: message.users });
+        }
+      } catch (e) {
+        // Ignore non-JSON messages (y-websocket protocol messages)
+      }
+    });
+
+    // Remove awareness state update handler since we're using WebSocket messages          
+    // Handle awareness changes
+    awareness.on('change', () => {
+      const states = Array.from(awareness.getStates());
+      set({ awarenessStates: states });
+    });
+
     // Handle new strokes and deletions from other clients
     yStrokes.observe(event => {
       // Handle deleted strokes
@@ -125,27 +212,38 @@ const useWhiteboardStore = create((set, get) => ({
         });
       });
     });
-    
-    // Handle awareness changes
-    awareness.on('change', () => {
-      const states = Array.from(awareness.getStates());
-      set({ awarenessStates: states });
+
+    // Add observer for active strokes
+    yActiveStrokes.observe(() => {
+      const activeStrokes = Array.from(yActiveStrokes.entries())
+        .filter(([clientId]) => clientId !== ydoc.clientID.toString())
+        .map(([_, stroke]) => stroke);
+      
+      set({ remoteActiveStrokes: activeStrokes });
     });
   },
   
   // Clean up Y.js resources
   cleanupYjs: () => {
+    if (yActiveStrokes) {
+      yActiveStrokes.delete(ydoc?.clientID.toString());
+    }
     if (provider) {
       provider.disconnect();
       provider = null;
     }
     if (ydoc) {
+      const clientID = ydoc.clientID;
+      set((state) => ({
+        activeUsers: state.activeUsers.filter((user) => user.clientID !== clientID),
+      }));
       ydoc.destroy();
       ydoc = null;
     }
     yStrokes = null;
+    yActiveStrokes = null;
     awareness = null;
-    set({ isConnected: false, clientID: null });
+    set({ isConnected: false, clientID: null, activeUsers: [] });
   },
   
   // Get Y.js resources
@@ -153,13 +251,21 @@ const useWhiteboardStore = create((set, get) => ({
     ydoc,
     provider,
     yStrokes,
+    yActiveStrokes,
     awareness
   }),
   
-  // Update awareness state
   updateAwareness: (state) => {
     if (awareness) {
-      awareness.setLocalState(state);
+      awareness.setLocalState({
+        cursor: state.cursor,
+        isDrawing: state.isDrawing,
+        user: {
+          id: state.user.id,
+          name: state.user.name,
+          color: state.penColor
+        }
+      });
     }
   },
   
@@ -174,17 +280,24 @@ const useWhiteboardStore = create((set, get) => ({
   cursorHistory: [],
   cursorHistorySize: 5,
   
-  startLine: (point) => set(state => ({
-    currentLine: {
+  startLine: (point) => {
+    const state = get();
+    const newLine = {
       id: Date.now().toString(),
-      clientID: ydoc?.clientID,  // Add clientID to stroke
+      clientID: ydoc?.clientID,
       points: [point],
       toolType: state.selectedTool,
       color: state.penColor,
       width: state.penSize
-    },
-    isDrawing: true
-  })),
+    };
+
+    // Add to active strokes map
+    if (yActiveStrokes) {
+      yActiveStrokes.set(ydoc.clientID.toString(), newLine);
+    }
+
+    set({ currentLine: newLine, isDrawing: true });
+  },
   
   updateLine: (point) => set(state => {
     if (!state.currentLine) return state;
@@ -193,39 +306,31 @@ const useWhiteboardStore = create((set, get) => ({
     
     // If this is a hand tracking point, apply smoothing
     if (point.fromHandTracking) {
-      const maxDistance = 100;
-      const threshold = 5;
-      
-      const distance = Math.sqrt(
-        Math.pow(lastPoint.x - point.x, 2) +
-        Math.pow(lastPoint.y - point.y, 2)
-      );
-      
-      // Skip update if point is too close or too far
-      if (distance < threshold || distance > maxDistance) {
-        return state;
-      }
-      
-      // Apply adaptive smoothing
-      const speedFactor = Math.min(distance / maxDistance, 1);
-      point = {
-        x: lastPoint.x + (point.x - lastPoint.x) * speedFactor,
-        y: lastPoint.y + (point.y - lastPoint.y) * speedFactor
-      };
+      point = drawingSmoothing(lastPoint, point, state.smoothingParams);
     }
     
-    return {
-      currentLine: {
-        ...state.currentLine,
-        points: [...state.currentLine.points, point]
-      }
+    const updatedLine = {
+      ...state.currentLine,
+      points: [...state.currentLine.points, point]
     };
+
+    // Update in active strokes map
+    if (yActiveStrokes) {
+      yActiveStrokes.set(ydoc.clientID.toString(), updatedLine);
+    }
+
+    return { currentLine: updatedLine };
   }),
 
   completeLine: () => {
     const state = get();
     if (!state.currentLine) return set({ isDrawing: false });
     
+    // Remove from active strokes
+    if (yActiveStrokes) {
+      yActiveStrokes.delete(ydoc.clientID.toString());
+    }
+
     // Keep track of this local stroke
     state.localStrokes.set(state.currentLine.id, state.currentLine);
     
@@ -251,7 +356,9 @@ const useWhiteboardStore = create((set, get) => ({
     set({
       lines: [...state.lines, state.currentLine],
       currentLine: null,
-      isDrawing: false
+      isDrawing: false,
+      undoStack: [...state.undoStack, state.currentLine], // Add to undoStack
+      redoStack: [] // Clear redoStack when new stroke is drawn
     });
   },
   
@@ -273,25 +380,38 @@ const useWhiteboardStore = create((set, get) => ({
       ...state.undoStack.slice(0, strokeIndex),
       ...state.undoStack.slice(strokeIndex + 1)
     ];
-    
-    // Remove from Y.js
+
+    // Remove from local strokes
+    state.localStrokes.delete(strokeToUndo.id);
+
+    // Use Y.js transaction to ensure atomic updates
     if (yStrokes) {
-      const yStrokeIndex = yStrokes.toArray().findIndex(
-        stroke => (Array.isArray(stroke) ? stroke[0] : stroke).id === strokeToUndo.id
-      );
-      if (yStrokeIndex !== -1) {
-        yStrokes.delete(yStrokeIndex, 1);
-      }
+      ydoc.transact(() => {
+        // Find and remove the stroke from Y.js array
+        const yStrokeIndex = yStrokes.toArray().findIndex(
+          stroke => (Array.isArray(stroke) ? stroke[0] : stroke).id === strokeToUndo.id
+        );
+        if (yStrokeIndex !== -1) {
+          yStrokes.delete(yStrokeIndex, 1);
+        }
+      });
     }
     
-    // Redraw background
-    get().clearBgCanvas();
-    newUndoStack.forEach(stroke => get().drawStrokeOnBg(stroke));
-    
+    // Update local state
     set(state => ({
       undoStack: newUndoStack,
       redoStack: [...state.redoStack, strokeToUndo]
     }));
+
+    // Force a redraw from Y.js state to ensure consistency
+    const currentStrokes = yStrokes.toArray();
+    get().clearBgCanvas();
+    currentStrokes.forEach(strokeData => {
+      const stroke = Array.isArray(strokeData) ? stroke[0] : strokeData;
+      if (stroke && stroke.points) {
+        get().drawStrokeOnBg(stroke);
+      }
+    });
   },
 
   redo: () => {
@@ -305,25 +425,35 @@ const useWhiteboardStore = create((set, get) => ({
     
     if (strokeIndex === -1) return;
     
-    // Remove the stroke from redoStack and add back to undoStack
+    // Remove the stroke from redoStack
     const strokeToRedo = state.redoStack[strokeIndex];
     const newRedoStack = [
       ...state.redoStack.slice(0, strokeIndex),
       ...state.redoStack.slice(strokeIndex + 1)
     ];
     
-    // Add back to Y.js
+    // Use Y.js transaction for atomic update
     if (yStrokes) {
-      yStrokes.push([strokeToRedo]);
+      ydoc.transact(() => {
+        yStrokes.push([strokeToRedo]);
+      });
     }
     
-    // Redraw the stroke
-    get().drawStrokeOnBg(strokeToRedo);
-    
+    // Update local state
     set(state => ({
       redoStack: newRedoStack,
       undoStack: [...state.undoStack, strokeToRedo]
     }));
+
+    // Force a redraw from Y.js state
+    const currentStrokes = yStrokes.toArray();
+    get().clearBgCanvas();
+    currentStrokes.forEach(strokeData => {
+      const stroke = Array.isArray(strokeData) ? stroke[0] : strokeData;
+      if (stroke && stroke.points) {
+        get().drawStrokeOnBg(stroke);
+      }
+    });
   },
 
   // Tool settings
@@ -335,6 +465,7 @@ const useWhiteboardStore = create((set, get) => ({
   updateCursorPosition: (position) =>  set({ cursorPosition: position }),
   
   setShowCursor: (show) => set({ showCursor: show }),
+  
   setIsDrawing: (isDrawing) => set({ isDrawing }),
   
   // Canvas operations
@@ -479,6 +610,60 @@ const useWhiteboardStore = create((set, get) => ({
         get().drawStrokeOnBg(stroke);
       });
     });
+  },
+  
+  // Update render function in Canvas component to include active strokes
+  renderCanvas: (ctx) => {
+    const state = get();
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    
+    // Draw background with completed strokes
+    if (state.bgCanvas) {
+      ctx.drawImage(state.bgCanvas, 0, 0);
+    }
+
+    // Draw current local stroke
+    if (state.currentLine) {
+      state.renderStroke(state.currentLine, ctx);
+    }
+
+    // Draw remote active strokes
+    state.remoteActiveStrokes.forEach(stroke => {
+      state.renderStroke(stroke, ctx);
+    });
+
+    // Draw other users' cursors
+    state.awarenessStates.forEach(([clientID, state]) => {
+      if (state.cursor && clientID !== ydoc.clientID) {
+        ctx.save();
+        const dpr = window.devicePixelRatio || 1;
+        ctx.scale(dpr, dpr);
+        ctx.fillStyle = state.isDrawing ? state.user.color : 'gray';
+        ctx.beginPath();
+        ctx.arc(state.cursor.x, state.cursor.y, 6, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        ctx.strokeText(state.user.name, state.cursor.x + 10, state.cursor.y + 10);
+        ctx.fillText(state.user.name, state.cursor.x + 10, state.cursor.y + 10);
+        ctx.restore();
+      }
+    });
+
+    // Draw hand tracking cursor if enabled
+    if (state.showCursor && state.cursorPosition) {
+      ctx.save();
+      const dpr = window.devicePixelRatio || 1;
+      ctx.scale(dpr, dpr);
+      ctx.fillStyle = state.isDrawing ? state.penColor : 'gray';
+      ctx.beginPath();
+      ctx.arc(state.cursorPosition.x, state.cursorPosition.y, 8, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.restore();
+    }
   },
   
   // Get strokes for export/generation

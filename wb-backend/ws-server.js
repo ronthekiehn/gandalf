@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils.js');
@@ -8,12 +9,11 @@ const path = require('path');
 const { createCanvas } = require('canvas');
 const fs = require("node:fs");
 const mime = require("mime-types");
-require('dotenv').config();
 
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { GoogleAIFileManager } = require("@google/generative-ai/server");
-//const apiKey = process.env.GOOGLE_API_KEY;
-const apiKey = 'AIzaSyDzd5SNNa6U-aoKcXM96FBw4otPh-MR41Y'
+const apiKey = process.env.GOOGLE_API_KEY;
+
 const genAI = new GoogleGenerativeAI(apiKey);
 const fileManager = new GoogleAIFileManager(apiKey);
 
@@ -321,7 +321,6 @@ setInterval(() => {
 
 server.listen(port, host, () => {
   console.log(`Yjs WebSocket Server is running on ws://${host}:${port}`);
-  
   process.on('SIGINT', () => {
     cleanDirectory(); // Clean up files before shutting down
     wss.close(() => {

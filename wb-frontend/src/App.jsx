@@ -4,14 +4,15 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import useWhiteboardStore from './stores/whiteboardStore';
 import useUIStore from './stores/uiStore';
-import { DarkModeToggle } from './components/uiElements';
-
+import { DarkModeToggle, Tooltip } from './components/uiElements';
+import { Settings } from 'lucide-react';
+import TopMenu from './components/TopMenu';
 //const API = 'https://ws.ronkiehn.dev';
 const API = 'http://localhost:1234';
 
 function App() {
   const [roomCode, setRoomCode] = useState(null);
-  const [createMode, setCreateMode] = useState(false);
+  const [createMode, setCreateMode] = useState(true);
   const [error, setError] = useState(null);
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ function App() {
 
   const activeUsers = useWhiteboardStore((state) => state.activeUsers);
   const darkMode = useUIStore((state) => state.darkMode);
+  const settingsOpen = useUIStore((state) => state.settingsOpen);
+  const toggleSettings = useUIStore((state) => state.toggleSettings);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -105,11 +108,18 @@ if (!roomCode) {
     >
             <div
               className={`absolute top-[3px] h-12 w-1/2 bg-white dark:bg-neutral-900 rounded-full shadow-md transition-all duration-300 ease-in-out ${
-                createMode ? "left-[calc(50%-4px)]" : "left-1"
+                !createMode ? "left-[calc(50%-4px)]" : "left-1"
               }`}
             />
 
             <div className="relative flex h-full">
+            <div
+                className={`flex-1 flex items-center justify-center text-lg z-10 transition-colors duration-300 ${
+                  createMode ? "text-black dark:text-white" : "text-neutral-400"
+                }`}
+              >
+                Create
+              </div>
               <div
                 className={`flex-1 flex items-center justify-center text-lg z-10 transition-colors duration-300 ${
                   !createMode ? "text-black dark:text-white" : "text-neutral-400"
@@ -117,13 +127,7 @@ if (!roomCode) {
               >
                 Join
               </div>
-              <div
-                className={`flex-1 flex items-center justify-center text-lg z-10 transition-colors duration-300 ${
-                  createMode ? "text-black dark:text-white" : "text-neutral-400"
-                }`}
-              >
-                Create
-              </div>
+
             </div>
           </div>
           {createMode ? (
@@ -156,18 +160,35 @@ if (!roomCode) {
 
 return (
   <div className="h-screen w-full flex flex-col">
-    <header className="flex items-center justify-between bg-white dark:bg-neutral-900 dark:text-white">
+    <header className="flex items-center justify-between gap-2 bg-white dark:bg-neutral-900 dark:text-white">
       <h1 className="p-2 text-2xl font-bold">Gandalf<span className="text-neutral-400">.design/{roomCode}</span></h1>
-      <div className="hidden sm:flex gap-2 items-center mr-2">
-        {activeUsers.map((user) => (
-          <p
-            key={user.clientID}
-            className="text-white text-sm flex justify-center items-center p-1 w-6 h-6 text-center rounded-full shadow-sm"
-            style={{ backgroundColor: user.color }}
+      <div className='flex items-center gap-4 mr-4'>
+        <div className="hidden sm:flex gap-1 items-center">
+          {activeUsers.map((user) => (
+            <Tooltip key={user.clientID} direction="bottom" content={user.userName}>
+              <p
+                className="text-white text-sm flex justify-center items-center p-1 w-8 h-8 text-center rounded-full shadow-sm"
+                style={{ backgroundColor: user.color }}
+              >
+                {user.userName?.[0] || '?'}
+              </p>
+            </Tooltip>
+          ))}
+        </div>
+        <Tooltip direction="bottom" content="Settings">
+        <button
+          className="cursor-pointer p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+          onClick={toggleSettings}
           >
-            {user.userName?.[0] || '?'}
-          </p>
-        ))}
+          <Settings />
+          </button>
+          </Tooltip>
+
+          {settingsOpen && (
+            
+            <TopMenu />
+          )}
+      
       </div>
     </header>
     

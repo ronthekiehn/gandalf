@@ -5,7 +5,6 @@ import Toolbar from './Toolbar';
 import useWhiteboardStore from '../stores/whiteboardStore';
 import useUIStore from '../stores/uiStore';
 import { cursorSmoothing } from '../utils/smoothing';
-import TopMenu from './TopMenu';
 
 const Canvas = ({ roomCode }) => {
   const store = useWhiteboardStore();
@@ -37,6 +36,26 @@ const Canvas = ({ roomCode }) => {
     bgCanvasRef.current = canvas;
   }, []);
 
+  const redrawAllStrokes = (store, bgCanvas) => {
+    const { yStrokes, ydoc } = store.getYjsResources();
+    if (yStrokes && bgCanvas) {
+      // Clear canvas first
+      store.clearBgCanvas();
+  
+      // Redraw all strokes
+      yStrokes.toArray().forEach((strokeData) => {
+        const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
+        if (stroke && stroke.points) {
+          if (stroke.clientID === ydoc.clientID) {
+            // If it's our stroke, ensure it's in localStrokes
+            store.localStrokes.set(stroke.id, stroke);
+          }
+          store.drawStrokeOnBg(stroke);
+        }
+      });
+    }
+  };
+
   useEffect(() => {
     const setupCanvas = (canvas, context) => {
       const width = window.innerWidth;
@@ -66,25 +85,7 @@ const Canvas = ({ roomCode }) => {
     const resizeCanvas = () => {
       setupCanvas(canvas, context);
       setupCanvas(bgCanvas, bgContext);
-
-      // After resizing, redraw all strokes from Y.js
-      const { yStrokes, ydoc } = store.getYjsResources();
-      if (yStrokes) {
-        // Clear canvas first
-        store.clearBgCanvas();
-
-        // Redraw all strokes
-        yStrokes.toArray().forEach((strokeData) => {
-          const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
-          if (stroke && stroke.points) {
-            if (stroke.clientID === ydoc.clientID) {
-              // If it's our stroke, ensure it's in localStrokes
-              store.localStrokes.set(stroke.id, stroke);
-            }
-            store.drawStrokeOnBg(stroke);
-          }
-        });
-      }
+      redrawAllStrokes(store, bgCanvas);
     };
 
     resizeCanvas();
@@ -96,6 +97,10 @@ const Canvas = ({ roomCode }) => {
     };
   }, []);
 
+  useEffect(() => {
+    redrawAllStrokes(store, bgCanvasRef.current);
+  }, [darkMode]);
+  
   useEffect(() => {
     if (!useHandTracking) return;
     cursorPositionRef.current = store.cursorPosition;
@@ -299,22 +304,16 @@ const Canvas = ({ roomCode }) => {
     <div className='h-full w-full flex justify-center'>
       <Toolbar />
 
-
-
-        <TopMenu />
-        
-
-        <AdvancedFeatures
-          canvasRef={canvasRef}
-          bgCanvasRef={bgCanvasRef}
-          ydoc={store.getYjsResources().ydoc}
-          awareness={store.getYjsResources().awareness}
-        />
-
+      <AdvancedFeatures
+        canvasRef={canvasRef}
+        bgCanvasRef={bgCanvasRef}
+        ydoc={store.getYjsResources().ydoc}
+        awareness={store.getYjsResources().awareness}
+      />
 
       <canvas
         ref={canvasRef}
-        className="w-full h-full bg-white dark:bg-neutral-900"
+        className={`${!useHandTracking ? 'cursor-crosshair' : ''} w-full h-full bg-white dark:bg-neutral-900`}
         onMouseDown={startDrawing}
         onMouseMove={draw}
         onMouseUp={endDrawing}
@@ -324,12 +323,14 @@ const Canvas = ({ roomCode }) => {
         onTouchEnd={endDrawing}
       />
 
-      {useHandTracking && <HandTracking onHandUpdate={handleHandUpdate} />}
+      {useHandTracking ? <HandTracking onHandUpdate={handleHandUpdate} /> : null}
 
       {useHandTracking && !isHandReady && (
         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white p-4 rounded-md z-50">
           <p className="text-center">
-            Please allow camera access and wait for the hand tracking model to load...
+            Please allow camera access and wait for the hand tracking model to load.
+            <br />
+            In this mode, pinch to draw and make a fist to clear the canvas.
           </p>
         </div>
       )}

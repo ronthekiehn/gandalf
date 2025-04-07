@@ -3,6 +3,8 @@ import { create } from 'zustand';
 const useUIStore = create((set) => ({
   darkMode: JSON.parse(localStorage.getItem("darkMode")) || false,
   useHandTracking: false,
+  settingsOpen: false,
+  toggleSettings: () => set((state) => ({ settingsOpen: !state.settingsOpen })),
   
   toggleDarkMode: () => set((state) => {
     const newMode = !state.darkMode;

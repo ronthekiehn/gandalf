@@ -5,6 +5,7 @@ import useWhiteboardStore from '../stores/whiteboardStore';
 const HandTracking = ({ onHandUpdate }) => {
   const videoRef = useRef(null);
   const handLandmarkerRef = useRef(null);
+  const streamRef = useRef(null);  // Add this line to store stream reference
   const [isLoading, setIsLoading] = useState(true);
   const requestRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
@@ -64,6 +65,7 @@ const HandTracking = ({ onHandUpdate }) => {
           }
         });
 
+        streamRef.current = stream;  // Store stream reference
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         requestRef.current = requestAnimationFrame(detectHands);
@@ -75,9 +77,16 @@ const HandTracking = ({ onHandUpdate }) => {
     setupWebcam();
 
     return () => {
-      if (videoRef.current?.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
-        tracks.forEach(track => track.stop());
+      // Clean up webcam when component unmounts
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current);
       }
     };
   }, [isLoading]);

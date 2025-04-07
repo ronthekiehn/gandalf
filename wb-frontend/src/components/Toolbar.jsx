@@ -1,6 +1,7 @@
 import { Mouse, Hand, Eraser, X } from 'lucide-react';
 import useWhiteboardStore from '../stores/whiteboardStore';
 import useUIStore from '../stores/uiStore';
+import { Tooltip } from './uiElements';
 
 const Toolbar = () => {
   const store = useWhiteboardStore();
@@ -8,9 +9,10 @@ const Toolbar = () => {
   const colors = ['black', 'red', 'blue', 'green'];
 
   return (
-    <div className='absolute bottom-3 px-3 py-2 flex gap-4 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
+    <div className='fade-in absolute bottom-3 px-3 py-2 flex gap-4 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
     bg-white text-black border-stone-300
     dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600'>
+    <Tooltip content='Toggle between hand tracking and mouse control. When hand tracking is enabled, pinch to draw.'>
       <button
         className='cursor-pointer p-2 rounded transition-colors
         hover:bg-neutral-100 dark:hover:bg-neutral-700'
@@ -18,8 +20,10 @@ const Toolbar = () => {
       >
         {useHandTracking ? <Hand /> : <Mouse />}
       </button>
+      </Tooltip>
 
-      <div className="flex items-center gap-2">
+      <Tooltip content="Select Pen Color">
+      <div className="py-2 flex items-center gap-2">
         {colors.map((color, index) => (
           <button
             key={color}
@@ -33,9 +37,9 @@ const Toolbar = () => {
             aria-label={color}
           />
         ))}
-
-       
       </div>
+      </Tooltip>
+      <Tooltip content="Eraser">
       <button
           className='cursor-pointer p-2 rounded transition-all flex items-center justify-center
           ring-offset-white dark:ring-offset-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700'
@@ -43,7 +47,9 @@ const Toolbar = () => {
         >
           <Eraser />
         </button>
-      <div className="slider-container flex flex-col items-center gap-1 w-full px-2">
+        </Tooltip>
+        <Tooltip content="Line Thickness (2-32px)">
+      <div className="slider-container flex flex-col items-center gap-1 w-full px-2 py-4">
         <input
           type="range"
           min="1"
@@ -68,7 +74,8 @@ const Toolbar = () => {
           }}
         />
       </div>
-
+      </Tooltip>
+      <Tooltip content="Clear Canvas">
       <button
         className='cursor-pointer p-2 rounded text-red-500 transition-colors
         hover:bg-neutral-100 dark:hover:bg-neutral-700'
@@ -76,6 +83,7 @@ const Toolbar = () => {
       >
         <X />
       </button>
+    </Tooltip>
     </div>
   );
 };

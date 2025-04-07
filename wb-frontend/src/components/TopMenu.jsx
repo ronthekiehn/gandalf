@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import useWhiteboardStore from '../stores/whiteboardStore';
-import { DarkModeToggle } from './uiElements';
+import { DarkModeToggle, Tooltip } from './uiElements';
 import Gemini from './Gemini';
 
 
@@ -91,14 +91,15 @@ const TopMenu = () => {
 
   return (
     <div
-    className='absolute top-12 right-4 p-2 px-4 pb-4 pt-5 rounded-2xl shadow-sm border flex flex-col gap-4 shadow-neutral-400 
+    className='fade-in-fast absolute top-12 right-4 p-2 px-4 pb-4 pt-5 rounded-2xl shadow-sm border flex flex-col gap-4 shadow-neutral-400 
     bg-white text-black border-stone-300
     dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600'
   >
-      <div className='flex flex-col gap-2'> 
-
+      <div className='z-10 flex flex-col gap-2'> 
+      <Tooltip direction='left' content='Display name (visible to everyone in the room)'>
         <input
           type="text"
+          maxLength={20}
           value={localUserName}
           onChange={(e) => {
             const newName = e.target.value;
@@ -111,11 +112,13 @@ const TopMenu = () => {
           dark:shadow-neutral-600"
           placeholder="name"
         />
-
+      </Tooltip>
+      <Tooltip direction='left' content='Toggle between light (whiteboard) and dark (blackboard) mode'>
       <div className='flex gap-2 justify-between items-center'>
         <span>Switch Theme</span>
       <DarkModeToggle />
       </div>
+      </Tooltip>
       <button
             className="text-black p-2 w-full rounded-full bg-neutral-100 dark:bg-neutral-800 dark:shadow-white/10 dark:text-white hover:-translate-y-0.5 transition-all !duration-200 ease-in-out hover:shadow-lg cursor-pointer active:shadow-none active:translate-y-0 !active:duration-100"
             onClick={exportAsPNG}
@@ -127,6 +130,7 @@ const TopMenu = () => {
     <div>
       <h3 className="text-center w-full text-neutral-400 text-sm">Handtracking Options</h3>
       <div className="mt-1 mb-2 flex flex-col justify-center gap-2 -mr-4">
+      <Tooltip direction='left' content='Determines the number of points to smooth over. May impact performance. Default: 1'>
         <label className="flex justify-between">
           Smoothing
             <input
@@ -137,6 +141,8 @@ const TopMenu = () => {
               className="underline underline-offset-2 text-center w-[5ch]"
             />
         </label>
+        </Tooltip>
+        <Tooltip direction='left' content='Reduces jittering by ignoring movements less than this many pixels. Default: 2px'>
         <label className="flex justify-between">
           Cursor Deadzone
             <input
@@ -147,6 +153,8 @@ const TopMenu = () => {
               className="underline underline-offset-2 text-center w-[5ch]"
             />
         </label>
+        </Tooltip>
+        <Tooltip direction='left' content='Increases line smoothnes by ignoring movements less than this many pixels while drawing. Applied after cursor smoothing and deadzone. Default: 5px'>
         <label className="flex justify-between">
           Drawing Deadzone
             <input
@@ -157,17 +165,21 @@ const TopMenu = () => {
               className="underline underline-offset-2 text-center w-[5ch]"
             />
         </label>
+        </Tooltip>
+        <Tooltip direction='left' content='How close your index finger and thumb must be to trigger drawing. Lower sensitivity means your fingers must be closer together to trigger a pinch. Default: 0.1'>
         <label className="flex justify-between">
           Pinch Sensitivity
             <input
               type="number"
               min={0}
               value={localInputs.pinchDist}
-              step={0.1}
+              step={0.01}
               onChange={(e) => setLocalInputs(prev => ({ ...prev, pinchDist: parseFloat(e.target.value) }))}
               className="underline underline-offset-2 text-center w-[5ch]"
             />
         </label>
+        </Tooltip>
+        <Tooltip direction='left' content='When enabled, hold a fist for 2s to clear the board. Default: On'>
         <label className="flex justify-between items-center">
           Fist to Clear
           <button
@@ -178,6 +190,7 @@ const TopMenu = () => {
           >
           </button>
         </label>
+        </Tooltip>
       </div>
       <div className='flex gap-2 justify-around px-2'>
         <button

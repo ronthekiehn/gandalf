@@ -8,6 +8,9 @@ video {
   visibility: hidden;
 }
 
+.fade-in-fast{
+  animation: fade-in 0.1s ease-in-out;
+}
 .fade-in {
   animation: fade-in 0.3s ease-in-out;
 }

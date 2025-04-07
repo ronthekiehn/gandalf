@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { drawingSmoothing } from '../utils/smoothing';
+import useUIStore from './uiStore';
 
 // Y.js connection singleton
 let ydoc = null;
@@ -554,10 +555,14 @@ const useWhiteboardStore = create((set, get) => ({
   // Stroke rendering
   renderStroke: (stroke, targetCtx) => {
     if (!stroke || !stroke.points || stroke.points.length === 0) return;
+
+    const isDarkMode = useUIStore.getState().darkMode; 
+   const strokeColor = stroke.color === 'black' && isDarkMode ? '#FFFFFF' : stroke.color;
+
+    targetCtx.strokeStyle = strokeColor || 'black';
     targetCtx.save();
     const dpr = window.devicePixelRatio || 1;
     targetCtx.scale(dpr, dpr);
-    targetCtx.strokeStyle = stroke.color || 'black';
     targetCtx.lineWidth = stroke.width;
     targetCtx.beginPath();
     targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);

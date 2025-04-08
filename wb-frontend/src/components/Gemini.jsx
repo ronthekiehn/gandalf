@@ -23,6 +23,7 @@ const Gemini = () => {
     setIsGenerating(true);
 
     try {
+      throw new Error(`test error fjfhdsfkjahsdjkfhadsjkfhakjshfkjahkfjhajkfh`); // Simulate an error for testing
       const allStrokes = getStrokesForExport();
       const response = await fetch('http://localhost:1234/generate', {
         method: 'POST',
@@ -68,7 +69,7 @@ const Gemini = () => {
   };
 
   return (
-    <>
+    <div className="relative">
     <Tooltip content="Uses Gemini Flash 2.0 to 'complete' your drawing. May hit rate limits!" direction="left" cn='w-full'>
       <button
         className="text-black p-2 w-full rounded-full bg-neutral-100 dark:bg-neutral-800 dark:shadow-white/10 dark:text-white hover:-translate-y-0.5 transition-all !duration-200 ease-in-out hover:shadow-lg cursor-pointer active:shadow-none active:translate-y-0 !active:duration-100"
@@ -78,6 +79,11 @@ const Gemini = () => {
         {isGenerating ? '⏳ Generating...' : 'Improve Image ✨'}
       </button>
     </Tooltip>
+      {error && (
+        <span className="absolute text-red-500 text-sm -bottom-26 left-1/2 transform -translate-x-1/2 w-full break-words">
+          {error}
+        </span>
+      )}
       {generatedImages.length > 0 && (
         <div className="fixed bottom-4 left-4 p-4 rounded-lg shadow-lg max-w-[80vw] bg-white/95 text-black dark:bg-gray-800/95 dark:text-white">
           <h3 className="font-bold mb-2">Generated Images</h3>
@@ -116,7 +122,7 @@ const Gemini = () => {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

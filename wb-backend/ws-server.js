@@ -115,11 +115,11 @@ const clients = new Map();
 const rooms = new Map();
 const ROOM_CLEANUP_DELAY = 10 * 60 * 1000; // 10 minutes
 const roomTimeouts = new Map();
-const WSrateLimiter = new RateLimiter(60000, 200);
-const httpRateLimiter = new RateLimiter(60000, 10);
+const WSrateLimiter = new RateLimiter(5000, 30); // 30 connections every 5 seconds
+const httpRateLimiter = new RateLimiter(5000, 10); // 10 requests every 5 seconds
 
-setInterval(() => WSrateLimiter.cleanup(), 60000);
-setInterval(() => httpRateLimiter.cleanup(), 60000);
+setInterval(() => WSrateLimiter.cleanup(), 10000);
+setInterval(() => httpRateLimiter.cleanup(), 10000);
 
 const server = http.createServer((req, res) => {
   const ip = req.socket.remoteAddress;

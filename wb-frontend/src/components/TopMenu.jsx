@@ -13,7 +13,7 @@ const defaultValues = {
 };
 
 const TopMenu = () => {
-  const { bgCanvas, userName, setUserName, smoothingParams, setSmoothingParams, pinchDist, setPinchDist, fistToClear, setFistToClear } = useWhiteboardStore();
+  const { bgCanvas, userName, setUserName, smoothingParams, setSmoothingParams, pinchDist, setPinchDist, fistToClear, setFistToClear, shapeRecognition, setShapeRecognition } = useWhiteboardStore();
   const [localUserName, setLocalUserName] = useState(userName);
 
   //everything to do with smoothing
@@ -91,11 +91,11 @@ const TopMenu = () => {
 
   return (
     <div
-    className='fade-in-fast absolute top-12 right-4 p-2 px-4 pb-4 pt-5 rounded-2xl shadow-sm border flex flex-col gap-4 shadow-neutral-400 
+    className='fade-in-fast absolute sm:top-12 top-14 right-2 p-2 px-4 pb-4 pt-5 rounded-2xl shadow-sm border flex flex-col gap-4 shadow-neutral-400 sm:w-fit left-2 sm:left-auto
     bg-white text-black border-stone-300
     dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600'
   >
-      <div className='z-10 flex flex-col gap-2'> 
+      <div className='z-10 flex flex-col gap-2 items-center'> 
       <Tooltip direction='left' content='Display name (visible to everyone in the room)'>
         <input
           type="text"
@@ -113,10 +113,10 @@ const TopMenu = () => {
           placeholder="name"
         />
       </Tooltip>
-      <Tooltip direction='left' content='Toggle between light (whiteboard) and dark (blackboard) mode'>
+      <Tooltip direction='left' content='Toggle between light (whiteboard) and dark (blackboard) mode' cn='w-full'>
       <div className='flex gap-2 justify-between items-center'>
         <span>Switch Theme</span>
-      <DarkModeToggle />
+          <DarkModeToggle />
       </div>
       </Tooltip>
       <button
@@ -219,9 +219,23 @@ const TopMenu = () => {
       </div>
       <div>
       <h3 className="text-center w-full text-neutral-400 text-sm mb-2 ">Experimental Features</h3>
+      <div className='flex flex-col gap-2'> 
+      <Tooltip direction='left' content='When enabled, circles, triangles, and rectangles will be created based off your lines. Default: Off'>
+        <label className="flex justify-between items-center">
+          Shape Recognition
+          <button
+            className={`w-4 h-4 mx-[1ch] cursor-pointer rounded-full border-black border-2 flex items-center justify-center dark:border-white ${shapeRecognition ? 'bg-black dark:bg-white' : 'bg-white dark:bg-black'}`}
+            onClick={() => setShapeRecognition(!shapeRecognition)}
+            aria-checked={shapeRecognition}
+            role="switch"
+          >
+          </button>
+        </label>
+        </Tooltip>
       <Gemini />
       </div>
-    </div>
+      </div>
+      </div>
   );
 };
 

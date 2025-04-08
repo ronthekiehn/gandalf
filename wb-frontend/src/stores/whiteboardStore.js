@@ -3,6 +3,7 @@ import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { drawingSmoothing } from '../utils/smoothing';
 import useUIStore from './uiStore';
+import { detectShape } from '../utils/shapeUtils';
 
 // Y.js connection singleton
 let ydoc = null;
@@ -41,7 +42,7 @@ const useWhiteboardStore = create((set, get) => ({
   // Drawing state (keep separate from user state)
   penColor: 'black',
   penSize: 4,
-  previousPenSize: 4, // Add this line
+  previousPenSize: 4,
   cursorPosition: { x: 0, y: 0 },
   showCursor: false,
   isDrawing: false,
@@ -87,6 +88,10 @@ const useWhiteboardStore = create((set, get) => ({
   // Add clear progress state
   clearProgress: 0,
   setClearProgress: (progress) => set({ clearProgress: progress }),
+
+  // Shape recognition state
+  shapeRecognition: false,
+  setShapeRecognition: (enabled) => set({ shapeRecognition: enabled }),
 
   // Initialize Y.js connection
   initializeYjs: (roomCode, userName) => {
@@ -336,21 +341,36 @@ const useWhiteboardStore = create((set, get) => ({
       yActiveStrokes.delete(ydoc.clientID.toString());
     }
 
+    let finalStroke = state.currentLine;
+
+    // Shape recognition
+    if (state.shapeRecognition) {
+      const detectedShape = detectShape(state.currentLine.points);
+      if (detectedShape) {
+        finalStroke = {
+          ...state.currentLine,
+          points: detectedShape.points,
+          shapeType: detectedShape.type
+        };
+      }
+    }
+
     // Keep track of this local stroke
-    state.localStrokes.set(state.currentLine.id, state.currentLine);
+    state.localStrokes.set(finalStroke.id, finalStroke);
     
-    // Draw the uncompressed stroke to background
-    get().drawStrokeOnBg(state.currentLine);
+    // Draw the stroke to background
+    get().drawStrokeOnBg(finalStroke);
     
-    // Add compressed version to Y.js if connected
+    // Add to Y.js if connected
     if (yStrokes) {
       try {
         const compressedStroke = {
-          points: get().compressStroke(state.currentLine.points),
-          color: state.currentLine.color,
-          width: state.currentLine.width,
-          clientID: state.currentLine.clientID,
-          id: state.currentLine.id
+          points: get().compressStroke(finalStroke.points),
+          color: finalStroke.color,
+          width: finalStroke.width,
+          clientID: finalStroke.clientID,
+          id: finalStroke.id,
+          shapeType: finalStroke.shapeType
         };
         yStrokes.push([compressedStroke]);
       } catch (err) {
@@ -359,11 +379,11 @@ const useWhiteboardStore = create((set, get) => ({
     }
     
     set({
-      lines: [...state.lines, state.currentLine],
+      lines: [...state.lines, finalStroke],
       currentLine: null,
       isDrawing: false,
-      undoStack: [...state.undoStack, state.currentLine], // Add to undoStack
-      redoStack: [] // Clear redoStack when new stroke is drawn
+      undoStack: [...state.undoStack, finalStroke],
+      redoStack: []
     });
   },
   
@@ -462,23 +482,23 @@ const useWhiteboardStore = create((set, get) => ({
   },
 
   // Tool settings
-  setTool: (tool) => set(state => ({ 
-    selectedTool: tool,
-    // When switching to eraser, save current size and set to eraser size
-    previousPenSize: tool === 'eraser' ? state.penSize : state.previousPenSize,
-    penColor: tool === 'eraser' ? 'white' : state.penColor,
-    // When switching back to pen, restore previous size
-    penSize: tool === 'eraser' ? 20 : state.previousPenSize
-  })),
+  setTool: (tool) => set(state => {
+    console.log('Previous Pen Size:', state.previousPenSize);
+    return { 
+      selectedTool: tool,
+      // When switching to eraser, save current size and set to eraser size
+      previousPenSize: tool === 'eraser' ? state.penSize : state.previousPenSize,
+      penColor: tool === 'eraser' ? 'white' : state.penColor,
+      // When switching back to pen, restore previous size
+      penSize: tool === 'eraser' ? 20 : state.previousPenSize
+    };
+  }),
 
   setPenSize: (size) => set({ penSize: size }),
 
-
   setColor: (color) => set(state => ({ 
     penColor: color,
-    // When selecting a color, switch back to pen tool
-    selectedTool: 'pen'
-  })),
+    })),
   
   // Cursor tracking
   updateCursorPosition: (position) =>  set({ cursorPosition: position }),
@@ -554,8 +574,8 @@ const useWhiteboardStore = create((set, get) => ({
   // Background canvas management
   bgCanvas: null,
   setBgCanvas: (canvas) => {
-    const width = window.innerWidth;
-    const height = window.innerHeight - 48;
+    const width = document.documentElement.clientWidth;
+    const height = document.documentElement.clientHeight - 48;
     const dpr = window.devicePixelRatio || 1;
     const ctx = canvas.getContext('2d');
 

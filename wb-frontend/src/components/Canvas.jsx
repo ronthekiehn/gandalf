@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import HandTracking from './HandTracking';
-import AdvancedFeatures from './AdvancedFeatures';
 import Toolbar from './Toolbar';
 import useWhiteboardStore from '../stores/whiteboardStore';
 import useUIStore from '../stores/uiStore';
@@ -30,8 +29,8 @@ const Canvas = ({ roomCode }) => {
 
   useEffect(() => {
     const canvas = document.createElement('canvas');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight - 48;
+    canvas.width = document.documentElement.clientWidth;
+    canvas.height = document.documentElement.clientHeight - 48;
     store.setBgCanvas(canvas);
     bgCanvasRef.current = canvas;
   }, []);
@@ -58,8 +57,8 @@ const Canvas = ({ roomCode }) => {
 
   useEffect(() => {
     const setupCanvas = (canvas, context) => {
-      const width = window.innerWidth;
-      const height = window.innerHeight - 48;
+      const width = document.documentElement.clientWidth;
+      const height = document.documentElement.clientHeight - 48;
       const dpr = window.devicePixelRatio || 1;
 
       // Reset any previous transforms
@@ -294,13 +293,6 @@ const Canvas = ({ roomCode }) => {
   return (
     <div className='h-full w-full flex justify-center'>
       <Toolbar />
-
-      <AdvancedFeatures
-        canvasRef={canvasRef}
-        bgCanvasRef={bgCanvasRef}
-        ydoc={store.getYjsResources().ydoc}
-        awareness={store.getYjsResources().awareness}
-      />
 
       <canvas
         ref={canvasRef}

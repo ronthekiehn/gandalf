@@ -41,6 +41,7 @@ const useWhiteboardStore = create((set, get) => ({
   // Drawing state (keep separate from user state)
   penColor: 'black',
   penSize: 4,
+  previousPenSize: 4, // Add this line
   cursorPosition: { x: 0, y: 0 },
   showCursor: false,
   isDrawing: false,
@@ -83,6 +84,10 @@ const useWhiteboardStore = create((set, get) => ({
   fistToClear: true,
   setFistToClear: (value) => set({ fistToClear: value }),
   
+  // Add clear progress state
+  clearProgress: 0,
+  setClearProgress: (progress) => set({ clearProgress: progress }),
+
   // Initialize Y.js connection
   initializeYjs: (roomCode, userName) => {
     // Return early if already initialized
@@ -164,7 +169,6 @@ const useWhiteboardStore = create((set, get) => ({
     });
 
     // Remove awareness state update handler since we're using WebSocket messages          
-    // Handle awareness changes
     awareness.on('change', () => {
       const states = Array.from(awareness.getStates());
       set({ awarenessStates: states });
@@ -458,9 +462,23 @@ const useWhiteboardStore = create((set, get) => ({
   },
 
   // Tool settings
-  setTool: (tool) => set({ selectedTool: tool }),
-  setColor: (color) => set({ penColor: color }),
+  setTool: (tool) => set(state => ({ 
+    selectedTool: tool,
+    // When switching to eraser, save current size and set to eraser size
+    previousPenSize: tool === 'eraser' ? state.penSize : state.previousPenSize,
+    penColor: tool === 'eraser' ? 'white' : state.penColor,
+    // When switching back to pen, restore previous size
+    penSize: tool === 'eraser' ? 20 : state.previousPenSize
+  })),
+
   setPenSize: (size) => set({ penSize: size }),
+
+
+  setColor: (color) => set(state => ({ 
+    penColor: color,
+    // When selecting a color, switch back to pen tool
+    selectedTool: 'pen'
+  })),
   
   // Cursor tracking
   updateCursorPosition: (position) =>  set({ cursorPosition: position }),
@@ -556,10 +574,23 @@ const useWhiteboardStore = create((set, get) => ({
   renderStroke: (stroke, targetCtx) => {
     if (!stroke || !stroke.points || stroke.points.length === 0) return;
 
-    const isDarkMode = useUIStore.getState().darkMode; 
-   const strokeColor = stroke.color === 'black' && isDarkMode ? '#FFFFFF' : stroke.color;
+    const isDarkMode = useUIStore.getState().darkMode;
+    let strokeColor;
+    
+      if (isDarkMode) {
+        if (stroke.color === 'black') {
+          strokeColor = 'white';
+        } else if (stroke.color === 'white') {
+          strokeColor = '#171717';
+        } else {
+          strokeColor = stroke.color;
+        }
+      } else {
+        strokeColor = stroke.color;
+      }
 
-    targetCtx.strokeStyle = strokeColor || 'black';
+
+    targetCtx.strokeStyle = strokeColor;
     targetCtx.save();
     const dpr = window.devicePixelRatio || 1;
     targetCtx.scale(dpr, dpr);
@@ -660,12 +691,20 @@ const useWhiteboardStore = create((set, get) => ({
 
     // Draw hand tracking cursor if enabled
     if (state.showCursor && state.cursorPosition) {
+      const isDarkMode = useUIStore.getState().darkMode;
       ctx.save();
       const dpr = window.devicePixelRatio || 1;
       ctx.scale(dpr, dpr);
       ctx.fillStyle = state.isDrawing ? state.penColor : 'gray';
       ctx.beginPath();
-      ctx.arc(state.cursorPosition.x, state.cursorPosition.y, 8, 0, 2 * Math.PI);
+      const newPenSize = Math.max(12, state.penSize);
+      ctx.arc(state.cursorPosition.x, state.cursorPosition.y, newPenSize / 2, 0, 2 * Math.PI);
+      if (state.selectedTool === 'eraser'){
+        ctx.strokeStyle = isDarkMode ? 'white' : 'black';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+     
       ctx.fill();
       ctx.restore();
     }

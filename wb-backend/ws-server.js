@@ -13,14 +13,81 @@ const mime = require("mime-types");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { GoogleAIFileManager } = require("@google/generative-ai/server");
 const apiKey = process.env.GOOGLE_API_KEY;
+const environment = process.env.ENVIRONMENT || 'production';
 
 const genAI = new GoogleGenerativeAI(apiKey);
 const fileManager = new GoogleAIFileManager(apiKey);
 
 const port = process.env.PORT || 1234;
 const host = process.env.HOST || '0.0.0.0';
-const ANONYMOUS_USER_REGEX = /^User-\d+$/;
 const OUTPUT_DIR = path.join(__dirname, 'generated-images');
+
+class RateLimiter {
+  constructor(windowMs = 60000, maxConnections = 200) {
+    this.windowMs = windowMs;
+    this.maxConnections = maxConnections;
+    this.connections = new Map();
+  }
+
+  isRateLimited(ip) {
+    const now = Date.now();
+    const history = this.connections.get(ip) || [];
+    
+    // Keep only connections within the time window
+    const recentConnections = history.filter(ts => now - ts < this.windowMs);
+    
+    // Add new connection timestamp
+    recentConnections.push(now);
+    this.connections.set(ip, recentConnections);
+
+    return recentConnections.length > this.maxConnections;
+  }
+
+  cleanup() {
+    const now = Date.now();
+    for (const [ip, timestamps] of this.connections.entries()) {
+      const valid = timestamps.filter(ts => now - ts < this.windowMs);
+      if (valid.length === 0) {
+        this.connections.delete(ip);
+      } else {
+        this.connections.set(ip, valid);
+      }
+    }
+  }
+}
+
+const prompt = `
+You are a teacher who is trying to make a student's artwork look nicer to impress their parents. You have been given this drawing, and you must enhance, refine and complete this drawing while maintaining its core elements and shapes. Try your best to leave the student's original work there, but add to the scene to make an impressive drawing. You may also only use the following colors: red, green, blue, black, and white.
+
+in other words:
+- REPEAT the entire drawing.
+- ENHANCE by adding additional lines, colors, fill, etc.
+- COMPLETE by adding other features to the foreground and background
+
+Remember to only use lines the same thickness that the student used.
+
+but DO NOT
+- modify the original drawing in any way
+
+The image should be the same aspect ratio, and have ALL of the same original lines. Otherwise, the parent might suspect that the teacher did some of the work.`;
+
+const sanitizeInput = (input) => {
+  return input
+    .replace(/[&<>"']/g, (char) => {
+      const entities = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#x27;'
+      };
+      return entities[char];
+    })
+    .replace(/[<>]/g, '') // Remove < and >
+    .trim()
+    .slice(0, 16); // Limit length
+};
+
 
 // Function to clean entire directory (only used at startup and shutdown)
 const cleanDirectory = () => {
@@ -46,10 +113,26 @@ if (!fs.existsSync(OUTPUT_DIR)) {
 
 const clients = new Map();
 const rooms = new Map();
+const ROOM_CLEANUP_DELAY = 10 * 60 * 1000; // 10 minutes
+const roomTimeouts = new Map();
+const WSrateLimiter = new RateLimiter(60000, 200);
+const httpRateLimiter = new RateLimiter(60000, 10);
+
+setInterval(() => WSrateLimiter.cleanup(), 60000);
+setInterval(() => httpRateLimiter.cleanup(), 60000);
 
 const server = http.createServer((req, res) => {
+  const ip = req.socket.remoteAddress;
+  if (httpRateLimiter.isRateLimited(ip)) {
+    console.warn(`Too many requests from ${ip}`);
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Too many requests' }));
+    return;
+  }
   const corsMiddleware = cors({
-    origin: ['http://localhost:5173', 'https://gandalf.design', 'https://www.gandalf.design'],
+    origin: environment === 'production' 
+      ? ['https://gandalf.design', 'https://www.gandalf.design'] 
+      : ['http://localhost:5173'],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
@@ -85,7 +168,7 @@ const server = http.createServer((req, res) => {
   
       req.on('end', async () => {
         try {
-          const { strokes, prompt } = JSON.parse(data);
+          const { strokes } = JSON.parse(data);
   
           if (!strokes || !Array.isArray(strokes)) {
             res.writeHead(400);
@@ -204,11 +287,20 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws, req) => {
+  ip = req.socket.remoteAddress;
+  if (WSrateLimiter.isRateLimited(ip)) {
+    console.warn(`Too many connections from ${ip}`);
+    ws.close(1008, 'Too many connections from your IP');
+    return;
+  }
+
   const url = new URL(req.url, `ws://${req.headers.host}`);
-  const roomCode = url.searchParams.get('room');
+  const roomCode = /^[A-Za-z0-9-]{4,12}$/.test(url.searchParams.get('room'));
   const connectionType = url.searchParams.get('type')?.split('/')[0];
-  const userName = url.searchParams.get('username')?.split('/')[0] || `User-${Math.floor(Math.random() * 1000)}`;
-  const userColor = url.searchParams.get('color')?.split('/')[0] || '#000000';
+  const userName = sanitizeInput(url.searchParams.get('username')?.split('/')[0]) || `User-${Math.floor(Math.random() * 1000)}`;
+  const userColor = /^#[0-9A-F]{6}$/i.test(url.searchParams.get('color')) 
+    ? url.searchParams.get('color')
+    : `#${Math.floor(Math.random() * 16777215).toString(16)}`;
 
 
   if (!roomCode) {
@@ -282,6 +374,10 @@ wss.on('connection', (ws, req) => {
           userName: c.userName,
           color: c.color
         }));
+
+        if (remainingUsers.length === 0) {
+          scheduleRoomCleanup(roomCode);
+        }
 
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -386,6 +482,27 @@ async function saveImage(imageBuffer) {
     throw error;
   }
 }
+
+const scheduleRoomCleanup = (roomCode) => {
+  // Clear any existing timeout
+  if (roomTimeouts.has(roomCode)) {
+    clearTimeout(roomTimeouts.get(roomCode));
+  }
+
+  // Schedule new cleanup
+  const timeout = setTimeout(() => {
+    const hasActiveUsers = Array.from(clients.values())
+      .some(client => client.roomCode === roomCode);
+    
+    if (!hasActiveUsers) {
+      rooms.delete(roomCode);
+      roomTimeouts.delete(roomCode);
+      console.log(`Cleaned up inactive room: ${roomCode}`);
+    }
+  }, ROOM_CLEANUP_DELAY);
+
+  roomTimeouts.set(roomCode, timeout);
+};
 
 async function uploadToGemini(path, mimeType) {
   const uploadResult = await fileManager.uploadFile(path, {

@@ -8,6 +8,7 @@ import { cursorSmoothing } from '../utils/smoothing';
 
 const Canvas = ({ roomCode }) => {
   const store = useWhiteboardStore();
+  const clearProgress = useWhiteboardStore((state) => state.clearProgress);
 
   // Initialize Y.js connection with store's username
   useEffect(() => {
@@ -27,7 +28,6 @@ const Canvas = ({ roomCode }) => {
   const cursorHistorySize = 1;
   const wasClickingRef = useRef(false);
 
-
   useEffect(() => {
     const canvas = document.createElement('canvas');
     canvas.width = window.innerWidth;
@@ -41,7 +41,7 @@ const Canvas = ({ roomCode }) => {
     if (yStrokes && bgCanvas) {
       // Clear canvas first
       store.clearBgCanvas();
-  
+
       // Redraw all strokes
       yStrokes.toArray().forEach((strokeData) => {
         const stroke = Array.isArray(strokeData) ? strokeData[0] : strokeData;
@@ -100,7 +100,7 @@ const Canvas = ({ roomCode }) => {
   useEffect(() => {
     redrawAllStrokes(store, bgCanvasRef.current);
   }, [darkMode]);
-  
+
   useEffect(() => {
     if (!useHandTracking) return;
     cursorPositionRef.current = store.cursorPosition;
@@ -179,15 +179,12 @@ const Canvas = ({ roomCode }) => {
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
 
-    // Calculate scale factors considering both canvas size and DPR
-    const scaleX = (canvas.width / dpr) / 640; // 640 is the video width
-    const scaleY = (canvas.height / dpr) / 480; // 480 is the video height
+    const scaleX = (canvas.width / dpr) / 640;
+    const scaleY = (canvas.height / dpr) / 480;
 
-    // Mirror the x coordinate and scale it
     const rawX = (canvas.width / dpr) - handData.position.x * scaleX;
     const rawY = handData.position.y * scaleY;
 
-    // Convert to canvas coordinates
     const x = rawX - rect.left;
     const y = rawY - rect.top;
 
@@ -196,13 +193,7 @@ const Canvas = ({ roomCode }) => {
     store.updateCursorPosition(smoothedPosition);
 
     const isPinching = handData.isPinching;
-    const isFist = handData.isFist;
     const isClicking = false;
-
-    if (isFist) {
-      clearCanvas();
-      return;
-    }
 
     if (!isClicking && wasClickingRef.current) {
       store.cycleColor();
@@ -332,6 +323,20 @@ const Canvas = ({ roomCode }) => {
             <br />
             In this mode, pinch to draw and make a fist to clear the canvas.
           </p>
+        </div>
+      )}
+
+      {clearProgress > 0 && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
+          <div className="!transition-none relative w-64 h-8 bg-neutral-200 dark:bg-neutral-700 dark:shadow-none rounded-full overflow-hidden shadow-lg">
+            <div
+              className="!transition-none absolute top-0 left-0 h-full bg-red-500"
+              style={{ width: `${Math.floor(clearProgress * 100) + 10}%` }}
+            ></div>
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className=" text-black dark:text-white">Clearing...</span>
+          </div>
         </div>
       )}
     </div>

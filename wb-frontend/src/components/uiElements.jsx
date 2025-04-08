@@ -15,7 +15,7 @@ export const DarkModeToggle = () => {
     );
 };
 
-export const Tooltip = ({ children, direction = "top", content }) => {
+export const Tooltip = ({ children, direction = "top", content, cn='' }) => {
     const [visible, setVisible] = useState(false);
     const timeoutRef = useRef(null);
 
@@ -48,14 +48,14 @@ export const Tooltip = ({ children, direction = "top", content }) => {
 
     return (
         <div
-            className="z-50 relative inline-block"
+            className={`z-50 relative inline-block ${cn}`}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
         >
             {children}
             {visible && (
                 <div
-                    className={`fade-in-fast absolute ${getTooltipPosition()} w-max max-w-60 px-2 py-1 text-xs text-neutral-600 bg-neutral-100 rounded shadow-lg`}
+                    className={`fade-in-fast absolute ${getTooltipPosition()} w-max max-w-60 px-2 py-1 text-xs text-neutral-600 bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-300 rounded shadow-lg`}
                 >
                     {content}
                 </div>

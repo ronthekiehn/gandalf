@@ -1,26 +1,13 @@
 import { useState, useEffect } from 'react'
 import { X, Download } from 'lucide-react'
 import useWhiteboardStore from '../stores/whiteboardStore';
-
-const prompt = `
-You are a teacher who is trying to make a student's artwork look nicer to impress their parents. You have been given this drawing, and you must enhance, refine and complete this drawing while maintaining its core elements and shapes. Try your best to leave the student's original work there, but add to the scene to make an impressive drawing. You may also only use the following colors: red, green, blue, black, and white.
-
-in other words:
-- REPEAT the entire drawing.
-- ENHANCE by adding additional lines, colors, fill, etc.
-- COMPLETE by adding other features to the foreground and background
-
-Remember to only use lines the same thickness that the student used.
-
-but DO NOT
-- modify the original drawing in any way
-
-The image should be the same aspect ratio, and have ALL of the same original lines. Otherwise, the parent might suspect that the teacher did some of the work.`;
+import { Tooltip } from './uiElements';
 
 const Gemini = () => {
   const [generatedImages, setGeneratedImages] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const { bgCanvas, getStrokesForExport } = useWhiteboardStore();
+  const [error, setError] = useState(null);
 
   // Cleanup URLs only on unmount
   useEffect(() => {
@@ -40,7 +27,7 @@ const Gemini = () => {
       const response = await fetch('http://localhost:1234/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strokes: allStrokes, prompt })
+        body: JSON.stringify({ strokes: allStrokes })
       });
 
       if (!response.ok) {
@@ -63,7 +50,8 @@ const Gemini = () => {
         setGeneratedImages(prev => [...prev, ...newImages]);
       }
     } catch (error) {
-      console.error('Generation failed:', error);
+      setError(`Error generating image: ${error.message}`);
+      console.error('Error generating image:', error);
     } finally {
       setIsGenerating(false);
     }
@@ -81,6 +69,7 @@ const Gemini = () => {
 
   return (
     <>
+    <Tooltip content="Uses Gemini Flash 2.0 to 'complete' your drawing. May hit rate limits!" direction="left" cn='w-full'>
       <button
         className="text-black p-2 w-full rounded-full bg-neutral-100 dark:bg-neutral-800 dark:shadow-white/10 dark:text-white hover:-translate-y-0.5 transition-all !duration-200 ease-in-out hover:shadow-lg cursor-pointer active:shadow-none active:translate-y-0 !active:duration-100"
         onClick={generateImage}
@@ -88,7 +77,7 @@ const Gemini = () => {
       >
         {isGenerating ? '⏳ Generating...' : 'Improve Image ✨'}
       </button>
-
+    </Tooltip>
       {generatedImages.length > 0 && (
         <div className="fixed bottom-4 left-4 p-4 rounded-lg shadow-lg max-w-[80vw] bg-white/95 text-black dark:bg-gray-800/95 dark:text-white">
           <h3 className="font-bold mb-2">Generated Images</h3>

@@ -17,6 +17,9 @@ export const drawingSmoothing = (lastPoint, newPoint, params) => {
 };
 
 export const cursorSmoothing = (history, newPoint, params) => {
+    if (params.cursorHistorySize < 1) {
+        return newPoint;
+    }
   if (history.length === 0) {
     history.push(newPoint);
     return newPoint;

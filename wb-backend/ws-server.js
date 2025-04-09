@@ -263,10 +263,7 @@ const server = http.createServer((req, res) => {
               stack: genError.stack
             });
             res.writeHead(500);
-            res.end(JSON.stringify({ 
-              error: 'Image generation failed', 
-              details: genError.message 
-            }));
+            res.end(JSON.stringify({ error: genError.message }));
           }
         } catch (error) {
           console.error('Request processing error:', {

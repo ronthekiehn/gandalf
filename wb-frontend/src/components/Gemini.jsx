@@ -32,7 +32,8 @@ const Gemini = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(`Server error: ${errorData.message || response.statusText}`);
       }
 
       const result = await response.json();
@@ -80,7 +81,7 @@ const Gemini = () => {
       </button>
     </Tooltip>
       {error && (
-        <span className="absolute text-red-500 text-sm -bottom-26 left-1/2 transform -translate-x-1/2 w-full break-words">
+        <span className="absolute text-red-500 text-sm top-16 left-1/2 transform -translate-x-1/2 w-full break-words">
           {error}
         </span>
       )}

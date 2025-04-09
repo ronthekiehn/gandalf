@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DarkModeToggle } from '../components/uiElements';
 import gandalf from '../assets/gandalf-noshadow.svg';
+import github from '../assets/github.svg';
 
 //const API = 'http://localhost:1234';
 const API = 'https://ws.ronkiehn.dev';
@@ -52,8 +53,8 @@ export default function Home() {
           <DarkModeToggle />
         </div>
 
-        <h1 className="sm:text-9xl text-7xl font-bold text-center">Gandalf</h1>
-        <h2 className=" sm:text-xl text-2xl font-semibold text-center flex items-center gap-2">
+        <h1 className="sm:text-9xl text-8xl font-bold text-center">Gandalf</h1>
+        <h2 className="text-lg sm:text-xl font-semibold text-center flex items-center gap-2">
         a magic whiteboard <img className="-mt-1" src={gandalf} alt="Gandalf Logo" width={32} height={32} /> 
         </h2>
         
@@ -105,6 +106,13 @@ export default function Home() {
         </div>
 
       </main>
+      <footer className="absolute bottom-0 left-1/2 transform -translate-x-1/2 flex gap-2 items-center p-2">
+       
+      <a href='https://github.com/ronthekiehn/gandalf' target="_blank" rel="noopener noreferrer" className="hover:scale-105">
+            <img src={github}  alt="GitHub" className="w-6 h-6" />
+        </a>
+        
+        </footer>
     </div>
   );
 }

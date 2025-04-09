@@ -4,8 +4,7 @@ import { DarkModeToggle } from '../components/uiElements';
 import gandalf from '../assets/gandalf-noshadow.svg';
 import github from '../assets/github.svg';
 
-//const API = 'http://localhost:1234';
-const API = 'https://ws.ronkiehn.dev';
+const API = (import.meta.env.MODE === 'development')  ? 'http://localhost:1234' : 'https://ws.ronkiehn.dev';
 
 export default function Home() {
   const [createMode, setCreateMode] = useState(true);

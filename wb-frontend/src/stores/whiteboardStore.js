@@ -11,8 +11,8 @@ let provider = null;
 let yStrokes = null;
 let yActiveStrokes = null;
 let awareness = null;
-//const API = 'ws://localhost:1234';
-const API = 'wss://ws.ronkiehn.dev';
+
+const API = (import.meta.env.MODE === 'development') ? 'ws://localhost:1234' : 'wss://ws.ronkiehn.dev';
 
 const useWhiteboardStore = create((set, get) => ({
   // User state
@@ -372,6 +372,7 @@ const useWhiteboardStore = create((set, get) => ({
           width: finalStroke.width,
           clientID: finalStroke.clientID,
           id: finalStroke.id,
+          toolType: finalStroke.toolType,
           shapeType: finalStroke.shapeType
         };
         yStrokes.push([compressedStroke]);
@@ -485,13 +486,10 @@ const useWhiteboardStore = create((set, get) => ({
 
   // Tool settings
   setTool: (tool) => set(state => {
-    console.log('Previous Pen Size:', state.previousPenSize);
     return { 
       selectedTool: tool,
-      // When switching to eraser, save current size and set to eraser size
       previousPenSize: tool === 'eraser' ? state.penSize : state.previousPenSize,
-      penColor: tool === 'eraser' ? 'white' : state.penColor,
-      // When switching back to pen, restore previous size
+      // Remove the color change for eraser
       penSize: tool === 'eraser' ? 20 : state.previousPenSize
     };
   }),
@@ -581,6 +579,10 @@ const useWhiteboardStore = create((set, get) => ({
     const dpr = window.devicePixelRatio || 1;
     const ctx = canvas.getContext('2d');
 
+    const darkMode = useUIStore.getState().darkMode;
+    ctx.fillStyle = darkMode ? '#171717' : '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     
@@ -595,35 +597,32 @@ const useWhiteboardStore = create((set, get) => ({
   // Stroke rendering
   renderStroke: (stroke, targetCtx) => {
     if (!stroke || !stroke.points || stroke.points.length === 0) return;
-
-    const isDarkMode = useUIStore.getState().darkMode;
-    let strokeColor;
-    
-      if (isDarkMode) {
-        if (stroke.color === 'black') {
-          strokeColor = 'white';
-        } else if (stroke.color === 'white') {
-          strokeColor = '#171717';
-        } else {
-          strokeColor = stroke.color;
-        }
-      } else {
-        strokeColor = stroke.color;
-      }
-
-
-    targetCtx.strokeStyle = strokeColor;
+  
     targetCtx.save();
     const dpr = window.devicePixelRatio || 1;
     targetCtx.scale(dpr, dpr);
+
+  
+    // Set composite operation based on tool type
+    if (stroke.toolType === 'eraser') {
+      targetCtx.globalCompositeOperation = 'destination-out';
+      console.log('Eraser stroke detected');
+      targetCtx.strokeStyle = 'rgba(0,0,0,1)'; // Color doesn't matter for eraser
+    } else {
+      targetCtx.globalCompositeOperation = 'source-over';
+      // Handle dark mode for regular strokes
+      const isDarkMode = useUIStore.getState().darkMode;
+      targetCtx.strokeStyle = isDarkMode && stroke.color === 'black' ? 'white' : stroke.color;
+    }
+  
     targetCtx.lineWidth = stroke.width;
     targetCtx.beginPath();
     targetCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
-
+  
     for (let i = 1; i < stroke.points.length; i++) {
       targetCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
     }
-
+  
     targetCtx.stroke();
     targetCtx.restore();
   },

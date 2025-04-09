@@ -86,7 +86,7 @@ const Toolbar = () => {
                   ? 'ring-2 ring-offset-2 ring-blue-500'
                   : 'opacity-100 hover:opacity-80'
               } ring-offset-white dark:ring-offset-neutral-800`}
-              style={{ backgroundColor: color }}
+              style={{ backgroundColor: darkMode && color === 'black' ? 'white' : color }}  
               onClick={() => {
                 store.setColor(color);
                 store.setTool('pen');

@@ -24,7 +24,6 @@ const Canvas = ({ roomCode }) => {
   const [isHandReady, setIsHandReady] = useState(false);
   const prevPinchState = useRef(false);
   const cursorHistoryRef = useRef([]);
-  const cursorHistorySize = 1;
   const wasClickingRef = useRef(false);
 
   useEffect(() => {

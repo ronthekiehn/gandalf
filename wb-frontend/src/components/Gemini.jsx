@@ -8,8 +8,8 @@ const Gemini = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const { bgCanvas, getStrokesForExport } = useWhiteboardStore();
   const [error, setError] = useState(null);
-  //const API = 'http://localhost:1234'; 
-  const API = 'https://ws.ronkiehn.dev'; 
+  const API = (import.meta.env.MODE === 'development') ? 'http://localhost:1234' : 'https://ws.ronkiehn.dev';
+  
   // Cleanup URLs only on unmount
   useEffect(() => {
     return () => {

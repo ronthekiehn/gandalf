@@ -606,7 +606,6 @@ const useWhiteboardStore = create((set, get) => ({
     // Set composite operation based on tool type
     if (stroke.toolType === 'eraser') {
       targetCtx.globalCompositeOperation = 'destination-out';
-      console.log('Eraser stroke detected');
       targetCtx.strokeStyle = 'rgba(0,0,0,1)'; // Color doesn't matter for eraser
     } else {
       targetCtx.globalCompositeOperation = 'source-over';

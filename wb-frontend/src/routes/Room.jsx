@@ -7,7 +7,7 @@ import { Settings } from 'lucide-react';
 import { Tooltip } from '../components/uiElements';
 import useUIStore from '../stores/uiStore';
 
-const API = (import.meta.env.MODE === 'development')  === 'dev' ? 'http://localhost:1234' : 'https://ws.ronkiehn.dev';
+const API = (import.meta.env.MODE === 'development') ? 'http://localhost:1234' : 'https://ws.ronkiehn.dev';
 
 export default function Room() {
   const { roomId } = useParams();

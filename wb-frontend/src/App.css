@@ -1,22 +1,16 @@
-/* We're using Tailwind for most styling, 
-   only add custom styles that can't be achieved with Tailwind */
-
-.logo {
-  height: 2em;
-  will-change: filter;
-  transition: filter 300ms;
+* {
+  transition: all 300ms, color 0ms;
 }
 
-.logo:hover {
-  filter: drop-shadow(0 0 1em rgba(100, 108, 255, 0.6));
-}
 
-/* Hand tracking video needs to be hidden but accessible to the model */
 video {
   position: absolute;
   visibility: hidden;
 }
 
+.fade-in-fast{
+  animation: fade-in 0.1s ease-in-out;
+}
 .fade-in {
   animation: fade-in 0.3s ease-in-out;
 }

@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import useWhiteboardStore from '../stores/whiteboardStore';
 
 const HandTracking = ({ onHandUpdate }) => {
   const videoRef = useRef(null);
   const handLandmarkerRef = useRef(null);
+  const streamRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
   const requestRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
   const fistStartTimeRef = useRef(null);
-  const pinkyStartTimeRef = useRef(null);
-  const FIST_CLEAR_DELAY = 2000; // 1 seconds in milliseconds
-  const PINKY_CLEAR_DELAY = 1000; // 1 seconds in milliseconds
+  const FIST_CLEAR_DELAY = 1500; // 1 second
+  const pinchDist = useWhiteboardStore((state) => state.pinchDist);
+  const store = useWhiteboardStore();
 
   useEffect(() => {
     async function initializeHandLandmarker() {
@@ -62,6 +64,7 @@ const HandTracking = ({ onHandUpdate }) => {
           }
         });
 
+        streamRef.current = stream;
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         requestRef.current = requestAnimationFrame(detectHands);
@@ -73,9 +76,15 @@ const HandTracking = ({ onHandUpdate }) => {
     setupWebcam();
 
     return () => {
-      if (videoRef.current?.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
-        tracks.forEach(track => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current);
       }
     };
   }, [isLoading]);
@@ -113,61 +122,32 @@ const HandTracking = ({ onHandUpdate }) => {
               Math.pow(indexTip.z - wrist.z, 2)
             );
 
-            const thumb_ring_distance = Math.sqrt(
-              Math.pow(thumbTip.x - ringTip.x, 2) +
-              Math.pow(thumbTip.y - ringTip.y, 2) +
-              Math.pow(thumbTip.z - ringTip.z, 2)
-            );
+            const isFist = fist_distance < 0.2;
 
-            const thumb_pinky_distance = Math.sqrt(
-              Math.pow(thumbTip.x - pinkyTip.x, 2) +
-              Math.pow(thumbTip.y - pinkyTip.y, 2) +
-              Math.pow(thumbTip.z - pinkyTip.z, 2)
-            );
-
-            const isFistNow = fist_distance < 0.25;
-            const isPinkyThumbNow = thumb_pinky_distance < 0.08;
-
-            // Handle fist gesture timing
-            if (isFistNow && !fistStartTimeRef.current) {
+            if (isFist && !fistStartTimeRef.current) {
               fistStartTimeRef.current = Date.now();
-            } else if (!isFistNow && fistStartTimeRef.current) {
+            } else if (!isFist && fistStartTimeRef.current) {
+              store.setClearProgress(0);
               fistStartTimeRef.current = null;
             }
 
-            // Handle pinky gesture timing
-            if (isPinkyThumbNow && !pinkyStartTimeRef.current) {
-              pinkyStartTimeRef.current = Date.now();
-            } else if (!isPinkyThumbNow && pinkyStartTimeRef.current) {
-              pinkyStartTimeRef.current = null;
+            if (fistStartTimeRef.current) {
+              const progress = Math.min((Date.now() - fistStartTimeRef.current) / FIST_CLEAR_DELAY, 1);
+              store.setClearProgress(progress);
+              if (progress >= 1) {
+                store.clearCanvas();
+                fistStartTimeRef.current = null;
+                store.setClearProgress(0);
+              }
             }
-
-            const shouldClear = fistStartTimeRef.current &&
-              (Date.now() - fistStartTimeRef.current >= FIST_CLEAR_DELAY);
-
-            const shouldGenerate = pinkyStartTimeRef.current &&
-              (Date.now() - pinkyStartTimeRef.current >= PINKY_CLEAR_DELAY);
 
             onHandUpdate({
               position: {
                 x: indexTip.x * videoRef.current.videoWidth,
                 y: indexTip.y * videoRef.current.videoHeight
               },
-              isPinching: pinch_distance < 0.08,
-              isFist: shouldClear,
-              isClicking: thumb_ring_distance < 0.08,
-              isGen: shouldGenerate,
-              landmarks: landmarks,
-              handedness: handedness.categoryName
+              isPinching: pinch_distance < pinchDist,
             });
-
-            // Reset timers after triggering
-            if (shouldClear) {
-              fistStartTimeRef.current = null;
-            }
-            if (shouldGenerate) {
-              pinkyStartTimeRef.current = null;
-            }
           }
         }
       } catch (error) {

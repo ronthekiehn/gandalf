@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils.js');
@@ -8,29 +9,130 @@ const path = require('path');
 const { createCanvas } = require('canvas');
 const fs = require("node:fs");
 const mime = require("mime-types");
-require('dotenv').config();
 
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { GoogleAIFileManager } = require("@google/generative-ai/server");
 const apiKey = process.env.GOOGLE_API_KEY;
+const environment = process.env.ENVIRONMENT || 'production';
+
 const genAI = new GoogleGenerativeAI(apiKey);
 const fileManager = new GoogleAIFileManager(apiKey);
 
 const port = process.env.PORT || 1234;
 const host = process.env.HOST || '0.0.0.0';
-const ANONYMOUS_USER_REGEX = /^User-\d+$/;
 const OUTPUT_DIR = path.join(__dirname, 'generated-images');
-// Create output directory if it doesn't exist
+
+class RateLimiter {
+  constructor(windowMs = 60000, maxConnections = 200) {
+    this.windowMs = windowMs;
+    this.maxConnections = maxConnections;
+    this.connections = new Map();
+  }
+
+  isRateLimited(ip) {
+    const now = Date.now();
+    const history = this.connections.get(ip) || [];
+    
+    // Keep only connections within the time window
+    const recentConnections = history.filter(ts => now - ts < this.windowMs);
+    
+    // Add new connection timestamp
+    recentConnections.push(now);
+    this.connections.set(ip, recentConnections);
+
+    return recentConnections.length > this.maxConnections;
+  }
+
+  cleanup() {
+    const now = Date.now();
+    for (const [ip, timestamps] of this.connections.entries()) {
+      const valid = timestamps.filter(ts => now - ts < this.windowMs);
+      if (valid.length === 0) {
+        this.connections.delete(ip);
+      } else {
+        this.connections.set(ip, valid);
+      }
+    }
+  }
+}
+
+const prompt = `
+You are a teacher who is trying to make a student's artwork look nicer to impress their parents. You have been given this drawing, and you must enhance, refine and complete this drawing while maintaining its core elements and shapes. Try your best to leave the student's original work there, but add to the scene to make an impressive drawing. You may also only use the following colors: red, green, blue, black, and white.
+
+in other words:
+- REPEAT the entire drawing.
+- ENHANCE by adding additional lines, colors, fill, etc.
+- COMPLETE by adding other features to the foreground and background
+
+Remember to only use lines the same thickness that the student used.
+
+but DO NOT
+- modify the original drawing in any way
+
+The image should be the same aspect ratio, and have ALL of the same original lines. Otherwise, the parent might suspect that the teacher did some of the work.`;
+
+const sanitizeInput = (input) => {
+  return input
+    .replace(/[&<>"']/g, (char) => {
+      const entities = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#x27;'
+      };
+      return entities[char];
+    })
+    .replace(/[<>]/g, '') // Remove < and >
+    .trim()
+    .slice(0, 16); // Limit length
+};
+
+
+// Function to clean entire directory (only used at startup and shutdown)
+const cleanDirectory = () => {
+  if (fs.existsSync(OUTPUT_DIR)) {
+    const files = fs.readdirSync(OUTPUT_DIR);
+    files.forEach(file => {
+      try {
+        fs.unlinkSync(path.join(OUTPUT_DIR, file));
+      } catch (err) {
+        console.error(`Error deleting file ${file}:`, err);
+      }
+    });
+    console.log('Cleaned generated-images directory');
+  }
+};
+
+// Create output directory if it doesn't exist and clean it
 if (!fs.existsSync(OUTPUT_DIR)) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+} else {
+  cleanDirectory();
 }
 
 const clients = new Map();
 const rooms = new Map();
+const ROOM_CLEANUP_DELAY = 10 * 60 * 1000; // 10 minutes
+const roomTimeouts = new Map();
+const WSrateLimiter = new RateLimiter(5000, 30); // 30 connections every 5 seconds
+const httpRateLimiter = new RateLimiter(5000, 10); // 10 requests every 5 seconds
+
+setInterval(() => WSrateLimiter.cleanup(), 10000);
+setInterval(() => httpRateLimiter.cleanup(), 10000);
 
 const server = http.createServer((req, res) => {
+  const ip = req.socket.remoteAddress;
+  if (httpRateLimiter.isRateLimited(ip)) {
+    console.warn(`Too many requests from ${ip}`);
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Too many requests' }));
+    return;
+  }
   const corsMiddleware = cors({
-    origin: ['http://localhost:5173', 'https://gandalf.design', 'https://www.gandalf.design'],
+    origin: environment === 'production' 
+      ? ['https://gandalf.design', 'https://www.gandalf.design'] 
+      : ['http://localhost:5173'],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
@@ -66,15 +168,9 @@ const server = http.createServer((req, res) => {
   
       req.on('end', async () => {
         try {
-          const { strokes, prompt } = JSON.parse(data);
-          console.log('Processing sketch:', {
-            strokeCount: strokes?.length,
-            prompt,
-            timestamp: new Date().toISOString()
-          });
+          const { strokes } = JSON.parse(data);
   
           if (!strokes || !Array.isArray(strokes)) {
-            console.error('Invalid strokes data:', strokes);
             res.writeHead(400);
             res.end(JSON.stringify({ error: 'Invalid strokes data' }));
             return;
@@ -82,11 +178,7 @@ const server = http.createServer((req, res) => {
   
           // Render strokes to image buffer
           const imageBuffer = renderStrokesToCanvas(strokes);
-          console.log('Canvas rendered:', {
-            bufferSize: imageBuffer?.length,
-            timestamp: new Date().toISOString()
-          });
-  
+
           if (!imageBuffer) {
             throw new Error('Failed to render canvas');
           }
@@ -95,10 +187,7 @@ const server = http.createServer((req, res) => {
           try {
             const savedResult = await saveImage(imageBuffer);
             const sketchPath = savedResult.images[0].path;
-            console.log('Sketch saved successfully:', {
-              path: sketchPath,
-              timestamp: new Date().toISOString()
-            });
+
   
             // Using the highlighted code - upload to Gemini and generate image
             const files = [
@@ -117,7 +206,6 @@ const server = http.createServer((req, res) => {
                         fileUri: files[0].uri,
                       },
                     },
-                    {text: prompt || "DRAW A CLIP ART VERSION OF THIS"},
                   ],
                 },
               ],
@@ -136,7 +224,6 @@ const server = http.createServer((req, res) => {
                   try {
                     const filename = path.join(OUTPUT_DIR, `generated-${timestamp}-${candidate_index}-${part_index}.${mime.extension(part.inlineData.mimeType)}`);
                     fs.writeFileSync(filename, Buffer.from(part.inlineData.data, 'base64'));
-                    console.log(`Output written to: ${filename}`);
                     
                     generatedImages.push({
                       mimeType: part.inlineData.mimeType,
@@ -158,6 +245,18 @@ const server = http.createServer((req, res) => {
               originalSketch: savedResult.images[0]
             }));
             
+            // Clean up files immediately after sending response
+            try {
+              // Delete the original sketch
+              fs.unlinkSync(sketchPath);
+              // Delete all generated images
+              generatedImages.forEach(img => {
+                fs.unlinkSync(img.path);
+              });
+              console.log('Cleaned up temporary files');
+            } catch (cleanupError) {
+              console.error('Error cleaning up files:', cleanupError);
+            }
           } catch (genError) {
             console.error('Gemini generation failed:', {
               error: genError.message,
@@ -187,68 +286,107 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
-
 wss.on('connection', (ws, req) => {
-  const url = new URL(req.url, `ws://${req.headers.host}`);
-  const roomCode = url.searchParams.get('room');
-  const connectionType = url.searchParams.get('type');
-  const userName = url.searchParams.get('username') || `User-${Math.floor(Math.random() * 1000)}`;
+  ip = req.socket.remoteAddress;
+  if (WSrateLimiter.isRateLimited(ip)) {
+    console.warn(`Too many connections from ${ip}`);
+    ws.close(1008, 'Too many connections from your IP');
+    return;
+  }
 
-  //console.log(`Connection requested - Username: ${userName}, Room: ${roomCode}`);
-  
+  const url = new URL(req.url, `ws://${req.headers.host}`);
+  const roomCode = /^[A-Za-z0-9-]{4,12}$/.test(url.searchParams.get('room'));
+  const connectionType = url.searchParams.get('type')?.split('/')[0];
+  const userName = sanitizeInput(url.searchParams.get('username')?.split('/')[0]) || `User-${Math.floor(Math.random() * 1000)}`;
+  const userColor = /^#[0-9A-F]{6}$/i.test(url.searchParams.get('color')) 
+    ? url.searchParams.get('color')
+    : `#${Math.floor(Math.random() * 16777215).toString(16)}`;
+
+
   if (!roomCode) {
     ws.close(1000, 'No room code provided');
     return;
   }
 
-  // Get the document name from the WebSocket protocol path
-  // This is set by y-websocket when creating the WebsocketProvider
   const pathParts = url.pathname.split('/');
   const docName = pathParts[pathParts.length - 1] || roomCode;
-  
-  // Use the room code alone as the unique identifier
-  // This ensures each room gets its own document
   const roomDocKey = roomCode;
-  
+
   if (!rooms.has(roomDocKey)) {
     rooms.set(roomDocKey, new Y.Doc());
   }
 
   const yDoc = rooms.get(roomDocKey);
 
-  if (connectionType === 'awareness' && !ANONYMOUS_USER_REGEX.test(userName)) {
+  if (connectionType === 'awareness') {
+    const clientID = crypto.randomUUID();
 
-    const clientId = crypto.randomUUID();
-    
-    for (const [existingId, client] of clients.entries()) {
-      if (client.ip === req.socket.remoteAddress && client.roomCode === roomCode) {
-        if (client.ws.readyState === WebSocket.OPEN) {
-          client.ws.close(1000, 'New connection from same IP');
-        }
-        clients.delete(existingId);
+    const newUser = { 
+      clientID, 
+      userName,
+      color: userColor
+    };
+    // Get existing users in the room
+    const activeUsers = Array.from(clients.values())
+      .filter(c => c.roomCode === roomCode)
+      .map(c => ({
+        clientID: c.id,
+        userName: c.userName,
+        color: c.color
+      }));
+
+    // Add the new user to the list
+    activeUsers.push(newUser);
+
+    // Send the complete active users list to everyone (including the new user)
+    const activeUsersMessage = JSON.stringify({
+      type: 'active-users',
+      users: activeUsers
+    });
+
+    // Send to all clients in the room, including the new one
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(activeUsersMessage);
       }
-    }
-    
+    });
+
     const clientInfo = {
-      id: clientId,
+      id: clientID,
       connectedAt: new Date(),
       ip: req.socket.remoteAddress,
       lastActive: new Date(),
       userName,
       roomCode,
-      ws
+      ws,
+      color: userColor
     };
-    
-    clients.set(clientId, clientInfo);
+
+    clients.set(clientID, clientInfo);
 
     ws.on('close', () => {
-      clients.delete(clientId);
-    });
-    
-    ws.on('message', () => {
-      if (clients.has(clientId)) {
-        clients.get(clientId).lastActive = new Date();
-      }
+      clients.delete(clientID);
+      // Send updated active users list after user leaves
+      const remainingUsers = Array.from(clients.values())
+        .filter(c => c.roomCode === roomCode)
+        .map(c => ({
+          clientID: c.id,
+          userName: c.userName,
+          color: c.color
+        }));
+
+        if (remainingUsers.length === 0) {
+          scheduleRoomCleanup(roomCode);
+        }
+
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'active-users',
+            users: remainingUsers
+          }));
+        }
+      });
     });
   }
 
@@ -258,7 +396,6 @@ wss.on('connection', (ws, req) => {
     maxBackoffTime: 2500,
     gc: false
   });
-
 });
 
 const getConnectedClients = () => {
@@ -276,13 +413,12 @@ const getConnectedClients = () => {
 setInterval(() => {
   const activeClients = getConnectedClients();
   console.log('Active clients:', activeClients);
-}, 60000);
-
+}, 3600000);
 
 server.listen(port, host, () => {
   console.log(`Yjs WebSocket Server is running on ws://${host}:${port}`);
-  
   process.on('SIGINT', () => {
+    cleanDirectory(); // Clean up files before shutting down
     wss.close(() => {
       console.log('WebSocket server closed');
       process.exit(0);
@@ -290,25 +426,14 @@ server.listen(port, host, () => {
   });
 });
 
-
-const renderStrokesToCanvas = (strokes) => {
-  console.log('Starting canvas rendering:', { strokeCount: strokes?.length });
-  
+const renderStrokesToCanvas = (strokes) => {  
   const canvas = createCanvas(2500, 1600);
   const ctx = canvas.getContext('2d');
   
-  // Set white background
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  // Draw all strokes
   strokes?.forEach((stroke, index) => {
-    console.log(`Rendering stroke ${index + 1}:`, {
-      color: stroke.color,
-      width: stroke.width,
-      points: stroke.points?.length
-    });
-
     if (!stroke.points?.length) return;
 
     ctx.beginPath();
@@ -332,14 +457,8 @@ async function saveImage(imageBuffer) {
   const sketchPath = path.join(OUTPUT_DIR, `sketch-${timestamp}.png`);
   
   try {
-    // Save the original sketch
     fs.writeFileSync(sketchPath, imageBuffer);
-    console.log('Saved sketch to file:', {
-      path: sketchPath,
-      size: fs.statSync(sketchPath).size
-    });
 
-    // Return the saved image path and data
     return {
       images: [{
         mimeType: "image/png",
@@ -358,18 +477,33 @@ async function saveImage(imageBuffer) {
   }
 }
 
-/**
- * Uploads the given file to Gemini.
- *
- * See https://ai.google.dev/gemini-api/docs/prompting_with_media
- */
+const scheduleRoomCleanup = (roomCode) => {
+  // Clear any existing timeout
+  if (roomTimeouts.has(roomCode)) {
+    clearTimeout(roomTimeouts.get(roomCode));
+  }
+
+  // Schedule new cleanup
+  const timeout = setTimeout(() => {
+    const hasActiveUsers = Array.from(clients.values())
+      .some(client => client.roomCode === roomCode);
+    
+    if (!hasActiveUsers) {
+      rooms.delete(roomCode);
+      roomTimeouts.delete(roomCode);
+      console.log(`Cleaned up inactive room: ${roomCode}`);
+    }
+  }, ROOM_CLEANUP_DELAY);
+
+  roomTimeouts.set(roomCode, timeout);
+};
+
 async function uploadToGemini(path, mimeType) {
   const uploadResult = await fileManager.uploadFile(path, {
     mimeType,
     displayName: path,
   });
   const file = uploadResult.file;
-  console.log(`Uploaded file ${file.displayName} as: ${file.name}`);
   return file;
 }
 

@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
 
 *{
     font-family: "Inclusive Sans", sans-serif;
@@ -8,3 +9,10 @@
     font-style: normal;
   }
   
+  html, body {
+    overscroll-behavior: none; /* prevents scroll chaining */
+    overflow: hidden; /* prevents page scroll */
+    touch-action: none; /* disables gestures like panning/zooming */
+    height: 100%;
+    margin: 0;
+  }

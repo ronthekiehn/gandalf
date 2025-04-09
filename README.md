@@ -1,7 +1,6 @@
 # GANDALF
-A magic whiteboard. 
-Visit [gandalf.design](gandalf.design) to try it out
-Built for Uncommon Hacks 2025
+A magic whiteboard.  
+Visit [gandalf.design](https://gandalf.design) to try it out.
 
 ## Features
 - Hand tracking

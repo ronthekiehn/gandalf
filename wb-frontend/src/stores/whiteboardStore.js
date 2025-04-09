@@ -80,7 +80,7 @@ const useWhiteboardStore = create((set, get) => ({
   },
 
   // pinching params
-  pinchDist: 0.1,
+  pinchDist: 0.07,
   setPinchDist: (dist) => set({ pinchDist: dist }),
 
   // more hand tracking options

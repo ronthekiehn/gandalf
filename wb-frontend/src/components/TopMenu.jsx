@@ -8,7 +8,7 @@ const defaultValues = {
   cursorHistorySize: { min: 0, max: 5, default: 1 },
   cursorDeadzone: { min: 0, max: 999, default: 2 },
   drawingDeadzone: { min: 0, max: 999, default: 5 },
-  pinchDist: { min: 0, max: 2, default: 0.1 },
+  pinchDist: { min: 0, max: 2, default: 0.07 },
   fistToClear: true
 };
 
@@ -166,7 +166,7 @@ const TopMenu = () => {
             />
         </label>
         </Tooltip>
-        <Tooltip direction='left' content='How close your index finger and thumb must be to trigger drawing. Lower sensitivity means your fingers must be closer together to trigger a pinch. Default: 0.1'>
+        <Tooltip direction='left' content='How close your index finger and thumb must be to trigger drawing. Lower sensitivity means your fingers must be closer together to trigger a pinch. Default: 0.07'>
         <label className="flex justify-between">
           Pinch Sensitivity
             <input

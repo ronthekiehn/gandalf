@@ -109,7 +109,7 @@ export default function Home() {
       <footer className="absolute bottom-0 left-1/2 transform -translate-x-1/2 flex gap-2 items-center p-2">
        
       <a href='https://github.com/ronthekiehn/gandalf' target="_blank" rel="noopener noreferrer" className="hover:scale-105">
-            <img src={github}  alt="GitHub" className="w-6 h-6" />
+            <img src={github}  alt="GitHub" className="dark:invert w-6 h-6" />
         </a>
         
         </footer>

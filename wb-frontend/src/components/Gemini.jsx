@@ -8,7 +8,8 @@ const Gemini = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const { bgCanvas, getStrokesForExport } = useWhiteboardStore();
   const [error, setError] = useState(null);
-
+  //const API = 'http://localhost:1234'; 
+  const API = 'https://ws.ronkiehn.dev'; 
   // Cleanup URLs only on unmount
   useEffect(() => {
     return () => {
@@ -23,9 +24,8 @@ const Gemini = () => {
     setIsGenerating(true);
 
     try {
-      throw new Error(`test error fjfhdsfkjahsdjkfhadsjkfhakjshfkjahkfjhajkfh`); // Simulate an error for testing
       const allStrokes = getStrokesForExport();
-      const response = await fetch('http://localhost:1234/generate', {
+      const response = await fetch(`${API}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ strokes: allStrokes })

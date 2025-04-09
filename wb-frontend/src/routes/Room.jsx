@@ -7,7 +7,8 @@ import { Settings } from 'lucide-react';
 import { Tooltip } from '../components/uiElements';
 import useUIStore from '../stores/uiStore';
 
-const API = 'http://localhost:1234';
+//const API = 'http://localhost:1234';
+const API = 'https://ws.ronkiehn.dev';
 
 export default function Room() {
   const { roomId } = useParams();
@@ -41,8 +42,10 @@ export default function Room() {
   return (
     <div className="sm:p-0 p-2 fade-in h-screen w-full flex flex-col">
       <header className=" flex items-center justify-between gap-2 bg-white dark:bg-neutral-900 dark:text-white">
-        <h1 className="p-2 text-2xl font-bold">
-          Gandalf<span className="text-neutral-400">.design/{roomId}</span>
+       
+        <h1 className="flex p-2 gap-2 items-start text-2xl font-bold">
+          <span>Gandalf<span className="text-neutral-400">.design/{roomId}</span></span>
+          
         </h1>
         <div className='flex items-center gap-4 mr-1'>
           <div className="hidden sm:flex gap-1 items-center">

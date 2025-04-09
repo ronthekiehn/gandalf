@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DarkModeToggle } from '../components/uiElements';
+import gandalf from '../assets/gandalf-noshadow.svg';
 
-const API = 'http://localhost:1234';
+//const API = 'http://localhost:1234';
+const API = 'https://ws.ronkiehn.dev';
 
 export default function Home() {
   const [createMode, setCreateMode] = useState(true);
@@ -45,13 +47,17 @@ export default function Home() {
 
   return (
     <div className="h-screen w-full flex flex-col bg-white text-black dark:bg-neutral-900 dark:text-white">
-      <main className="fade-in grow flex flex-col items-center justify-center gap-10 mb-20">
+      <main className="fade-in grow flex flex-col items-center justify-center gap-2 mb-28">
         <div className="absolute top-1 right-1">
           <DarkModeToggle />
         </div>
 
-        <h1 className="sm:text-9xl text-7xl font-bold mb-4">Gandalf</h1>
-        <div className="relative px-4 py-6 rounded-2xl shadow-md border shadow-neutral-500 flex flex-col gap-4
+        <h1 className="sm:text-9xl text-7xl font-bold text-center">Gandalf</h1>
+        <h2 className=" sm:text-xl text-2xl font-semibold text-center flex items-center gap-2">
+        a magic whiteboard <img className="-mt-1" src={gandalf} alt="Gandalf Logo" width={32} height={32} /> 
+        </h2>
+        
+        <div className="mt-8 relative px-4 py-6 rounded-2xl shadow-md border shadow-neutral-500 flex flex-col gap-4
           bg-white text-black border-stone-300
           dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600">
 
@@ -74,6 +80,7 @@ export default function Home() {
               </div>
             </div>
           </div>
+          
 
           {createMode ? (
             <button
@@ -96,6 +103,7 @@ export default function Home() {
             </div>
           )}
         </div>
+
       </main>
     </div>
   );

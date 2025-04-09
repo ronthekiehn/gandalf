@@ -11,6 +11,8 @@ let provider = null;
 let yStrokes = null;
 let yActiveStrokes = null;
 let awareness = null;
+//const API = 'ws://localhost:1234';
+const API = 'wss://ws.ronkiehn.dev';
 
 const useWhiteboardStore = create((set, get) => ({
   // User state
@@ -104,7 +106,7 @@ const useWhiteboardStore = create((set, get) => ({
     ydoc = new Y.Doc();
     
     // Set up WebSocket connection with proper parameters
-    const wsUrl = new URL('ws://localhost:1234');
+    const wsUrl = new URL(API);
     wsUrl.searchParams.set('username', userName);
     wsUrl.searchParams.set('room', roomCode);
     wsUrl.searchParams.set('type', 'awareness');
@@ -715,7 +717,13 @@ const useWhiteboardStore = create((set, get) => ({
       ctx.save();
       const dpr = window.devicePixelRatio || 1;
       ctx.scale(dpr, dpr);
-      ctx.fillStyle = state.isDrawing ? state.penColor : 'gray';
+      if (isDarkMode && state.penColor === 'black') {
+        ctx.fillStyle = state.isDrawing ? 'white' : 'gray';
+      } else if (isDarkMode && state.selectedTool === 'eraser') {
+        ctx.fillStyle = state.isDrawing ? 'black' : 'gray';
+      } else {
+        ctx.fillStyle = state.isDrawing ? state.penColor : 'gray';
+      }
       ctx.beginPath();
       const newPenSize = Math.max(12, state.penSize);
       ctx.arc(state.cursorPosition.x, state.cursorPosition.y, newPenSize / 2, 0, 2 * Math.PI);

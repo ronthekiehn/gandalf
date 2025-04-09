@@ -413,7 +413,7 @@ const getConnectedClients = () => {
 setInterval(() => {
   const activeClients = getConnectedClients();
   console.log('Active clients:', activeClients);
-}, 60000);
+}, 3600000);
 
 server.listen(port, host, () => {
   console.log(`Yjs WebSocket Server is running on ws://${host}:${port}`);
@@ -426,9 +426,7 @@ server.listen(port, host, () => {
   });
 });
 
-const renderStrokesToCanvas = (strokes) => {
-  console.log('Starting canvas rendering:', { strokeCount: strokes?.length });
-  
+const renderStrokesToCanvas = (strokes) => {  
   const canvas = createCanvas(2500, 1600);
   const ctx = canvas.getContext('2d');
   
@@ -460,10 +458,6 @@ async function saveImage(imageBuffer) {
   
   try {
     fs.writeFileSync(sketchPath, imageBuffer);
-    console.log('Saved sketch to file:', {
-      path: sketchPath,
-      size: fs.statSync(sketchPath).size
-    });
 
     return {
       images: [{
@@ -510,7 +504,6 @@ async function uploadToGemini(path, mimeType) {
     displayName: path,
   });
   const file = uploadResult.file;
-  console.log(`Uploaded file ${file.displayName} as: ${file.name}`);
   return file;
 }
 

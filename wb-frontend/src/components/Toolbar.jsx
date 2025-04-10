@@ -89,7 +89,7 @@ const Toolbar = () => {
               style={{ backgroundColor: darkMode && color === 'black' ? 'white' : color }}  
               onClick={() => {
                 store.setColor(color);
-                store.setTool('pen');
+                store.selectedTool === 'eraser' && store.setTool('pen');
               }}
               aria-label={color}
             />

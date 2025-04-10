@@ -64,7 +64,7 @@ in other words:
 - ENHANCE by adding additional lines, colors, fill, etc.
 - COMPLETE by adding other features to the foreground and background
 
-Remember to only use lines the same thickness that the student used. And leave the background white. 
+Leave the background white, and use thick strokes.
 
 but DO NOT
 - modify the original drawing in any way

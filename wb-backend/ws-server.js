@@ -60,12 +60,11 @@ const prompt = `
 You are a teacher who is trying to make a student's artwork look nicer to impress their parents. You have been given this drawing, and you must enhance, refine and complete this drawing while maintaining its core elements and shapes. Try your best to leave the student's original work there, but add to the scene to make an impressive drawing. You may also only use the following colors: red, green, blue, black, and white.
 
 in other words:
-- REPEAT the entire drawing. Keep the scale the same.
+- REPEAT the entire drawing. Keep the scale the same, lines, and position of the drawing the same. 
 - ENHANCE by adding additional lines, colors, fill, etc.
 - COMPLETE by adding other features to the foreground and background
 
-Leave the background white, and use thick strokes.
-
+Leave the background white, and use thick strokes. NO INTRICATE DETAILS OR PATTERNS.
 but DO NOT
 - modify the original drawing in any way
 
@@ -292,13 +291,12 @@ wss.on('connection', (ws, req) => {
   }
 
   const url = new URL(req.url, `ws://${req.headers.host}`);
-  const roomCode = /^[A-Za-z0-9-]{4,12}$/.test(url.searchParams.get('room'));
+  const roomCode = url.searchParams.get('room');
   const connectionType = url.searchParams.get('type')?.split('/')[0];
   const userName = sanitizeInput(url.searchParams.get('username')?.split('/')[0]) || `User-${Math.floor(Math.random() * 1000)}`;
   const userColor = /^#[0-9A-F]{6}$/i.test(url.searchParams.get('color')) 
     ? url.searchParams.get('color')
     : `#${Math.floor(Math.random() * 16777215).toString(16)}`;
-
 
   if (!roomCode) {
     ws.close(1000, 'No room code provided');
@@ -318,33 +316,33 @@ wss.on('connection', (ws, req) => {
   if (connectionType === 'awareness') {
     const clientID = crypto.randomUUID();
 
-    const newUser = { 
-      clientID, 
+    // Store client info first
+    clients.set(clientID, {
+      id: clientID,
+      ws,
+      roomCode,
       userName,
       color: userColor
-    };
-    // Get existing users in the room
+    });
+
+    // Get all users in this room (including the new user since we stored it above)
     const activeUsers = Array.from(clients.values())
       .filter(c => c.roomCode === roomCode)
       .map(c => ({
         clientID: c.id,
         userName: c.userName,
-        color: c.color
+        color: c.color,
+        roomCode: c.roomCode
       }));
 
-    // Add the new user to the list
-    activeUsers.push(newUser);
-
-    // Send the complete active users list to everyone (including the new user)
-    const activeUsersMessage = JSON.stringify({
-      type: 'active-users',
-      users: activeUsers
-    });
-
-    // Send to all clients in the room, including the new one
+    // Send to all clients in THIS room only
     wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(activeUsersMessage);
+      const clientData = Array.from(clients.values()).find(c => c.ws === client);
+      if (client.readyState === WebSocket.OPEN && clientData?.roomCode === roomCode) {
+        client.send(JSON.stringify({
+          type: 'active-users',
+          users: activeUsers
+        }));
       }
     });
 
@@ -369,15 +367,17 @@ wss.on('connection', (ws, req) => {
         .map(c => ({
           clientID: c.id,
           userName: c.userName,
-          color: c.color
+          color: c.color,
+          roomCode: c.roomCode
         }));
 
-        if (remainingUsers.length === 0) {
-          scheduleRoomCleanup(roomCode);
-        }
+      if (remainingUsers.length === 0) {
+        scheduleRoomCleanup(roomCode);
+      }
 
       wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
+        const clientData = Array.from(clients.values()).find(c => c.ws === client);
+        if (client.readyState === WebSocket.OPEN && clientData?.roomCode === roomCode) {
           client.send(JSON.stringify({
             type: 'active-users',
             users: remainingUsers

@@ -81,7 +81,7 @@ const StrokeGen = () => {
       </Tooltip>
 
       {showPrompt && (
-        <div className='fixed sm:absolute bottom-18 sm:bottom-14 sm:-translate-x-1/2 sm:left-auto sm:right-auto right-5 left-5 fade-in-fast'>
+        <div className='fixed sm:absolute top-18 sm:bottom-14 sm:-translate-x-1/2 sm:left-auto sm:right-auto right-5 left-5 fade-in-fast'>
            {error && (
             <div className="bottom-10 absolute text-sm text-red-600 dark:text-red-400 text-center ">
               {error}

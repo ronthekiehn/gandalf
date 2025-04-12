@@ -5,6 +5,7 @@ const useUIStore = create((set) => ({
   useHandTracking: false,
   settingsOpen: false,
   toggleSettings: () => set((state) => ({ settingsOpen: !state.settingsOpen })),
+  setSettings: (value) => set({ settingsOpen: value }),
   
   toggleDarkMode: () => set((state) => {
     const newMode = !state.darkMode;

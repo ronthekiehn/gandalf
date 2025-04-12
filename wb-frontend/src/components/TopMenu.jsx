@@ -91,7 +91,7 @@ const TopMenu = () => {
 
   return (
     <div
-    className='fade-in-fast absolute sm:top-12 top-14 right-2 p-2 px-4 pb-4 pt-5 rounded-2xl shadow-sm border flex flex-col gap-4 shadow-neutral-400 sm:w-fit left-2 sm:left-auto
+    className='slide-left absolute sm:top-12 top-14 right-2 p-2 px-4 pb-4 pt-5 rounded-2xl shadow-sm border flex flex-col gap-4 shadow-neutral-400 sm:w-fit left-2 sm:left-auto
     bg-white text-black border-stone-300
     dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600'
   >

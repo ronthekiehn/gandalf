@@ -49,7 +49,7 @@ const Toolbar = () => {
   };
 
   return (
-    <div className='sm:left-auto sm:right-auto right-2 left-2 fade-in absolute bottom-3 sm:px-3 sm:py-2 px-2 py-1 flex gap-[2px] sm:gap-1 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
+    <div className='z-50 sm:left-auto sm:right-auto right-2 left-2 fade-in absolute bottom-3 sm:px-3 sm:py-2 px-2 py-1 flex gap-[2px] sm:gap-1 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
     bg-white text-black border-stone-300
     dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600'>
       <div className='relative'>

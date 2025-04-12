@@ -1,15 +1,30 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, use } from 'react'
 import useWhiteboardStore from '../stores/whiteboardStore';
+import useUIStore from '../stores/uiStore';
 import { Tooltip } from './uiElements';
 
 const StrokeGen = () => {
   const { bgCanvas, getStrokesForExport, importGeneratedStrokes } = useWhiteboardStore();
+  const { settingsOpen, setSettings } = useUIStore();
   const [error, setError] = useState(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [cooldownTime, setCooldownTime] = useState(0);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 640);
   const API = (import.meta.env.MODE === 'development') ? 'http://localhost:1234' : 'https://ws.ronkiehn.dev';
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 640);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile && settingsOpen) {
+      setShowPrompt(false);
+    }
+  }, [settingsOpen, isMobile]);
 
   useEffect(() => {
     if (cooldownTime > 0) {
@@ -19,6 +34,13 @@ const StrokeGen = () => {
       return () => clearInterval(timer);
     }
   }, [cooldownTime]);
+
+  const handlePromptToggle = () => {
+    if (isMobile && showPrompt === false) {
+      setSettings(false);
+    }
+    setShowPrompt(!showPrompt);
+  };
 
   const generateStrokes = async () => {
     if (!bgCanvas || !prompt || cooldownTime > 0) return;
@@ -73,7 +95,7 @@ const StrokeGen = () => {
         <button
           className={`cursor-pointer px-[6px] py-[2px] sm:px-[11px] sm:py-1.5 rounded transition-all flex items-center justify-center sm:text-lg
           ring-offset-white dark:ring-offset-neutral-800  ${showPrompt ? 'bg-neutral-200 dark:bg-neutral-700' : 'hover:bg-neutral-100 dark:hover:bg-neutral-700'}`}
-          onClick={() => setShowPrompt(!showPrompt)}
+          onClick={handlePromptToggle}
           aria-label="AI"
         >
           AI
@@ -81,7 +103,7 @@ const StrokeGen = () => {
       </Tooltip>
 
       {showPrompt && (
-        <div className='fixed sm:absolute top-18 sm:top-auto sm:bottom-14 sm:-translate-x-1/2 sm:left-auto sm:right-auto right-5 left-5 fade-in-fast'>
+        <div className='fixed sm:absolute top-18 sm:top-auto sm:bottom-14 sm:-translate-x-1/2 sm:left-auto sm:right-auto right-5 left-5 slide-up'>
            {error && (
             <div className="bottom-10 absolute text-sm text-red-600 dark:text-red-400 text-center ">
               {error}

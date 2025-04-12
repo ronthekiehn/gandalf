@@ -14,6 +14,34 @@ video {
 .fade-in {
   animation: fade-in 0.3s ease-in-out;
 }
+
+.slide-up {
+  animation: slide-up 0.1s ease-in-out, fade-in 0.1s ease-in-out;
+}
+
+
+.slide-left {
+  animation: slide-left 0.1s ease-in-out, fade-in 0.1s ease-in-out;
+}
+
+@keyframes slide-left {
+  from {
+    transform: translateX(5px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(5px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

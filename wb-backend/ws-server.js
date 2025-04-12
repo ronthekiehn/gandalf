@@ -87,6 +87,15 @@ const sanitizeInput = (input) => {
     .slice(0, 16); // Limit length
 };
 
+const sanitizePrompt = (input) => {
+  if (!input) return '';
+  return input
+    .replace(/[&<>"']/g, '') // Remove potentially harmful characters
+    .trim();
+};
+
+
+
 
 // Function to clean entire directory (only used at startup and shutdown)
 const cleanDirectory = () => {
@@ -116,9 +125,11 @@ const ROOM_CLEANUP_DELAY = 10 * 60 * 1000; // 10 minutes
 const roomTimeouts = new Map();
 const WSrateLimiter = new RateLimiter(5000, 30); // 30 connections every 5 seconds
 const httpRateLimiter = new RateLimiter(5000, 10); // 10 requests every 5 seconds
+const generateStrokesLimiter = new RateLimiter(5000, 1); // 1 request per 5s
 
 setInterval(() => WSrateLimiter.cleanup(), 10000);
 setInterval(() => httpRateLimiter.cleanup(), 10000);
+setInterval(() => generateStrokesLimiter.cleanup(), 60000);
 
 const server = http.createServer((req, res) => {
   const ip = req.socket.remoteAddress;
@@ -159,7 +170,7 @@ const server = http.createServer((req, res) => {
       const exists = rooms.has(roomCode);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ exists }));
-    } else if (req.url.startsWith('/generate')) {
+    } else if (req.url === '/generate') {
       let data = '';
       req.on('data', chunk => {
         data += chunk;
@@ -167,7 +178,7 @@ const server = http.createServer((req, res) => {
   
       req.on('end', async () => {
         try {
-          const { strokes } = JSON.parse(data);
+          const { strokes, canvasWidth, canvasHeight } = JSON.parse(data);
   
           if (!strokes || !Array.isArray(strokes)) {
             res.writeHead(400);
@@ -175,8 +186,8 @@ const server = http.createServer((req, res) => {
             return;
           }
   
-          // Render strokes to image buffer
-          const imageBuffer = renderStrokesToCanvas(strokes);
+          // Render strokes to image buffer with provided dimensions
+          const imageBuffer = renderStrokesToCanvas(strokes, canvasWidth, canvasHeight);
 
           if (!imageBuffer) {
             throw new Error('Failed to render canvas');
@@ -273,6 +284,117 @@ const server = http.createServer((req, res) => {
           res.end(JSON.stringify({ error: error.message }));
         }
       });
+    } else if (req.url === '/generate-strokes') {
+      const ip = req.socket.remoteAddress;
+      if (generateStrokesLimiter.isRateLimited(ip)) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Please wait between generations' }));
+        return;
+      }
+
+      let data = '';
+      req.on('data', chunk => {
+        data += chunk;
+      });
+  
+      req.on('end', async () => {
+        try {
+          const { strokes, userPrompt, canvasWidth, canvasHeight } = JSON.parse(data);
+          if (!strokes || !Array.isArray(strokes)) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'Invalid strokes data' }));
+            return;
+          }
+
+          if (!userPrompt || typeof userPrompt !== 'string') {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'Invalid user prompt' }));
+            return;
+          }
+
+          const sanitizedPrompt = sanitizePrompt(userPrompt);
+
+          if (!sanitizedPrompt || typeof sanitizedPrompt !== 'string') {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'EVIL PROMPT DETECTED!?' }));
+            return;
+          }
+          
+          // Convert strokes to string representation for logging
+          const strokesStr = JSON.stringify(strokes);
+          const finalPrompt = `Strokes data: ${strokesStr}\nUser request: ${sanitizedPrompt}`;
+
+          // Render strokes to image buffer
+          const imageBuffer = renderStrokesToCanvas(strokes, canvasWidth, canvasHeight);
+
+          if (!imageBuffer) {
+            throw new Error('Failed to render canvas');
+          }
+  
+          // Save the sketch
+          try {
+            const savedResult = await saveImage(imageBuffer);
+            const sketchPath = savedResult.images[0].path;
+
+  
+            // Using the highlighted code - upload to Gemini and generate image
+            const files = [
+              await uploadToGemini(sketchPath, "image/png"),
+            ];
+  
+            const chatSession = textModel.startChat({
+              textGenerationConfig,
+              history: [
+                {
+                  role: "user",
+                  parts: [
+                    {
+                      fileData: {
+                        mimeType: files[0].mimeType,
+                        fileUri: files[0].uri,
+                      },
+                    },
+                  ],
+                },
+              ],
+            });
+            
+            const result = await chatSession.sendMessage(finalPrompt);
+            const response = result.response.text();
+            const cleanedText = response
+            .replace(/```json\s*/g, '')  // Remove opening ```json
+            .replace(/```\s*$/g, '')     // Remove closing ```
+            .replace(/^```|```$/g, '')   // Remove any remaining backticks
+            .trim();
+            // Return all results
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ newStrokes: cleanedText }));
+            
+            // Clean up files immediately after sending response
+            try {
+              // Delete the original sketch
+              fs.unlinkSync(sketchPath);
+              console.log('Cleaned up temporary files');
+            } catch (cleanupError) {
+              console.error('Error cleaning up files:', cleanupError);
+            }
+          } catch (genError) {
+            console.error('Gemini generation failed:', {
+              error: genError.message,
+              stack: genError.stack
+            });
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: genError.message }));
+          }
+        } catch (error) {
+          console.error('Request processing error:', {
+            error: error.message,
+            stack: error.stack
+          });
+          res.writeHead(500);
+          res.end(JSON.stringify({ error: error.message }));
+        }
+      });
     } else {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end('Yjs WebSocket Server is running\n');
@@ -317,13 +439,18 @@ wss.on('connection', (ws, req) => {
     const clientID = crypto.randomUUID();
 
     // Store client info first
-    clients.set(clientID, {
+    const clientInfo = {
       id: clientID,
-      ws,
-      roomCode,
+      connectedAt: new Date(),
+      ip: req.socket.remoteAddress,
+      lastActive: new Date(),
       userName,
+      roomCode,
+      ws,
       color: userColor
-    });
+    };
+
+    clients.set(clientID, clientInfo);
 
     // Get all users in this room (including the new user since we stored it above)
     const activeUsers = Array.from(clients.values())
@@ -346,18 +473,6 @@ wss.on('connection', (ws, req) => {
       }
     });
 
-    const clientInfo = {
-      id: clientID,
-      connectedAt: new Date(),
-      ip: req.socket.remoteAddress,
-      lastActive: new Date(),
-      userName,
-      roomCode,
-      ws,
-      color: userColor
-    };
-
-    clients.set(clientID, clientInfo);
 
     ws.on('close', () => {
       clients.delete(clientID);
@@ -386,6 +501,9 @@ wss.on('connection', (ws, req) => {
       });
     });
   }
+  ws.on('error', () => {
+    ws.close();
+  });
 
   setupWSConnection(ws, req, {
     doc: yDoc,
@@ -409,8 +527,8 @@ const getConnectedClients = () => {
 
 setInterval(() => {
   const activeClients = getConnectedClients();
-  console.log('Active clients:', activeClients);
-}, 3600000);
+  console.log('Active clients:', activeClients.length);
+}, 600000);
 
 server.listen(port, host, () => {
   console.log(`Yjs WebSocket Server is running on ws://${host}:${port}`);
@@ -423,10 +541,10 @@ server.listen(port, host, () => {
   });
 });
 
-const renderStrokesToCanvas = (strokes) => {  
-  const canvas = createCanvas(2500, 1600);
+const renderStrokesToCanvas = (strokes, canvasWidth, canvasHeight) => {  
+  const canvas = createCanvas(canvasWidth, canvasHeight);
   const ctx = canvas.getContext('2d');
-  
+
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
@@ -486,6 +604,8 @@ const scheduleRoomCleanup = (roomCode) => {
       .some(client => client.roomCode === roomCode);
     
     if (!hasActiveUsers) {
+      const doc = rooms.get(roomCode);
+      if (doc) doc.destroy(); // Free up Yjs internals
       rooms.delete(roomCode);
       roomTimeouts.delete(roomCode);
       console.log(`Cleaned up inactive room: ${roomCode}`);
@@ -508,6 +628,26 @@ const model = genAI.getGenerativeModel({
   model: "gemini-2.0-flash-exp-image-generation",
 });
 
+const textModel = genAI.getGenerativeModel({
+  model: "gemini-2.0-flash",
+  systemInstruction: `You are an assistant that helps add drawings to a digital whiteboard. You are given:
+  1) An image of the current whiteboard state
+  2) The existing stroke data that represents the current drawings
+  3) A user request for what to add to the whiteboard
+
+  Respond ONLY with a JSON array of new strokes needed to fulfill the user's request. Each stroke should follow this format:
+  {points: [{ x: number, y: number }], color: string, width: number}
+
+  Guidelines for creating high-quality strokes:
+  - Create smooth, natural-looking strokes with 10-20 points per stroke when appropriate
+  - Match the style and stroke density of existing content on the whiteboard
+  - Position new elements logically in relation to existing content
+  - If asked to "fill" an area, use wider strokes or multiple overlapping strokes
+  - For detailed drawings, use 10-20 strokes minimum to ensure adequate detail
+  - Use appropriate colors that match the existing content or what is described in the user request
+  Return ONLY the JSON array without explanations or additional text.`
+  });
+
 const generationConfig = {
   temperature: 0.01,
   topP: 0.95,
@@ -518,4 +658,44 @@ const generationConfig = {
     "text",
   ],
   responseMimeType: "text/plain",
+};
+
+const textGenerationConfig = {
+  temperature: 1,
+  topP: 0.95,
+  topK: 40,
+  maxOutputTokens: 8192,
+  responseModalities: [
+  ],
+  responseMimeType: "application/json",
+  responseSchema: {
+    type: "object",
+    properties: {
+      points: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            x: {
+              type: "integer"
+            },
+            y: {
+              type: "integer"
+            }
+          }
+        }
+      },
+      color: {
+        type: "string"
+      },
+      width: {
+        type: "integer"
+      }
+    },
+    required: [
+      "points",
+      "color",
+      "width"
+    ]
+  },
 };

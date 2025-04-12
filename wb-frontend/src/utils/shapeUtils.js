@@ -117,15 +117,63 @@ const calculateRectangleScore = (points, minX, maxX, minY, maxY) => {
   return 1 / (1 + Math.average(edgeDistances));
 };
 
+const findStraightSections = (points) => {
+  const sections = [];
+  let currentSection = [points[0]];
+  
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+    
+    // Check if current point is in line with prev and next
+    const d = getDistanceToLine(curr, prev, next);
+    if (d < 3) { // Threshold for "straightness"
+      currentSection.push(curr);
+    } else {
+      if (currentSection.length > 3) { // Min points for a straight section
+        sections.push([...currentSection]);
+      }
+      currentSection = [curr];
+    }
+  }
+  
+  if (currentSection.length > 3) {
+    sections.push(currentSection);
+  }
+  
+  return sections;
+};
+
 const calculateCircleScore = (points, centerX, centerY, width, height) => {
-  const avgRadius = Math.min(width, height) / 2;
+  const avgRadiusX = width / 2;
+  const avgRadiusY = height / 2;
+
+  // Find straight sections
+  const straightSections = findStraightSections(points);
+  const totalPoints = points.length;
+  const pointsInStraightSections = straightSections.reduce((sum, section) => sum + section.length, 0);
+  const straightRatio = pointsInStraightSections / totalPoints;
+  
+  // If more than 10% of points are in straight sections, heavily penalize circle score
+  if (straightRatio > 0.10) {
+    return 0.1;
+  }
+
   const radiusDeviations = points.map(point => {
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(point.x - centerX, 2) + Math.pow(point.y - centerY, 2)
+    const distanceFromCenterX = (point.x - centerX) / avgRadiusX;
+    const distanceFromCenterY = (point.y - centerY) / avgRadiusY;
+    const distanceFromEllipse = Math.sqrt(
+      Math.pow(distanceFromCenterX, 2) + Math.pow(distanceFromCenterY, 2)
     );
-    return Math.abs(distanceFromCenter - avgRadius);
+    return Math.abs(distanceFromEllipse - 1);
   });
-  return 1 / (1 + Math.average(radiusDeviations));
+
+  // Lower score for very elongated ellipses
+  const shapeRatio = Math.max(width / height, height / width);
+  const ratioPenalty = shapeRatio > 2 ? 0.5 : 1;
+
+  return (1 / (1 + Math.average(radiusDeviations))) * ratioPenalty;
 };
 
 const calculateTriangleScore = (points) => {

@@ -1,8 +1,9 @@
-import { Mouse, Hand, Eraser, X } from 'lucide-react';
+import { Mouse, Hand, Eraser, X, Triangle } from 'lucide-react';
 import { useRef, useEffect, useState } from 'react';
 import useWhiteboardStore from '../stores/whiteboardStore';
 import useUIStore from '../stores/uiStore';
 import { Tooltip } from './uiElements';
+import StrokeGen from './StrokeGen';
 
 const Toolbar = () => {
     const CLEAR_DELAY = 1000; // 1 second
@@ -48,7 +49,7 @@ const Toolbar = () => {
   };
 
   return (
-    <div className='sm:left-auto sm:right-auto right-2 left-2 fade-in absolute bottom-3 px-3 py-2 flex sm:gap-4 gap-1 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
+    <div className='sm:left-auto sm:right-auto right-2 left-2 fade-in absolute bottom-3 px-3 py-2 flex gap-1 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
     bg-white text-black border-stone-300
     dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600'>
       <div className='relative'>
@@ -77,7 +78,7 @@ const Toolbar = () => {
       
 
       <Tooltip content="Select Pen Color">
-        <div className="py-2 flex items-center gap-2">
+        <div className="py-2 px-2 flex items-center gap-2">
           {colors.map((color) => (
             <button
               key={color}
@@ -96,6 +97,7 @@ const Toolbar = () => {
           ))}
         </div>
       </Tooltip>
+      
       <Tooltip content="Eraser">
         <button
           className={`cursor-pointer p-2 rounded transition-all flex items-center justify-center
@@ -107,6 +109,18 @@ const Toolbar = () => {
           <Eraser />
         </button>
       </Tooltip>
+      <StrokeGen />
+      <Tooltip content="Shape Recognition">
+        <button
+          className={`cursor-pointer p-2 rounded transition-all flex items-center justify-center text-lg
+            ring-offset-white dark:ring-offset-neutral-800  ${store.shapeRecognition ? 'bg-neutral-200 dark:bg-neutral-700' : 'hover:bg-neutral-100 dark:hover:bg-neutral-700'}`}
+          onClick={() => store.setShapeRecognition(!store.shapeRecognition)}
+          aria-label="Shape Recognition"
+        >
+          <Triangle />
+        </button>
+      </Tooltip>
+      
       <Tooltip content="Line Thickness (2-32px)">
         <div className="slider-container flex flex-col items-center gap-1 w-full px-2 py-4">
           <input

@@ -49,7 +49,7 @@ const StrokeGen = () => {
       }
 
       const result = await response.json();
-      const finalStrokes = JSON.parse([result.newStrokes]);
+      const finalStrokes = JSON.parse(result.newStrokes);
       importGeneratedStrokes(finalStrokes);
       setPrompt('');
       setCooldownTime(10); // Set 10 second cooldown

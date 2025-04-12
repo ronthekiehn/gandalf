@@ -49,13 +49,13 @@ const Toolbar = () => {
   };
 
   return (
-    <div className='sm:left-auto sm:right-auto right-2 left-2 fade-in absolute bottom-3 px-3 py-2 flex gap-1 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
+    <div className='sm:left-auto sm:right-auto right-2 left-2 fade-in absolute bottom-3 sm:px-3 sm:py-2 px-2 py-1 flex gap-[2px] sm:gap-1 justify-between items-center shadow-md rounded-2xl shadow-neutral-400 border
     bg-white text-black border-stone-300
     dark:bg-neutral-900 dark:text-white dark:border-stone-700 dark:shadow-neutral-600'>
       <div className='relative'>
       <Tooltip content='Toggle between hand tracking and mouse control. When hand tracking is enabled, pinch to draw.'>
         <button
-          className='cursor-pointer p-2 rounded transition-colors
+          className='cursor-pointer p-1 sm:p-2 rounded transition-colors
           hover:bg-neutral-100 dark:hover:bg-neutral-700'
           onClick={handleTrackingToggle}
         >
@@ -78,13 +78,13 @@ const Toolbar = () => {
       
 
       <Tooltip content="Select Pen Color">
-        <div className="py-2 px-2 flex items-center gap-2">
+        <div className="sm:p-2 p-1 flex items-center gap-1 sm:gap-2">
           {colors.map((color) => (
             <button
               key={color}
-              className={`cursor-pointer w-6 h-6 rounded-full transition-all ${
+              className={`cursor-pointer w-4 h-4 sm:w-6 sm:h-6 rounded-full transition-all ${
                 color === store.penColor && store.selectedTool === 'pen'
-                  ? 'ring-2 ring-offset-2 ring-blue-500'
+                  ? 'ring-2 ring-offset-1 sm:ring-offset-2 ring-blue-500'
                   : 'opacity-100 hover:opacity-80'
               } ring-offset-white dark:ring-offset-neutral-800`}
               style={{ backgroundColor: darkMode && color === 'black' ? 'white' : color }}  
@@ -100,29 +100,29 @@ const Toolbar = () => {
       
       <Tooltip content="Eraser">
         <button
-          className={`cursor-pointer p-2 rounded transition-all flex items-center justify-center
+          className={`cursor-pointer p-1 sm:p-2 rounded transition-all flex items-center justify-center
           ring-offset-white dark:ring-offset-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700
-          ${store.selectedTool === 'eraser' ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+          ${store.selectedTool === 'eraser' ? 'ring-2 ring-blue-500 ring-offset-1 sm:ring-offset-2' : ''}`}
           onClick={() => store.setTool('eraser')}
           aria-label="Eraser"
         >
-          <Eraser />
+          <Eraser className='w-5 h-5 sm:h-auto sm:w-auto'/>
         </button>
       </Tooltip>
       <StrokeGen />
       <Tooltip content="Shape Recognition">
         <button
-          className={`cursor-pointer p-2 rounded transition-all flex items-center justify-center text-lg
+          className={`cursor-pointer p-1 sm:p-2 rounded transition-all flex items-center justify-center text-lg
             ring-offset-white dark:ring-offset-neutral-800  ${store.shapeRecognition ? 'bg-neutral-200 dark:bg-neutral-700' : 'hover:bg-neutral-100 dark:hover:bg-neutral-700'}`}
           onClick={() => store.setShapeRecognition(!store.shapeRecognition)}
           aria-label="Shape Recognition"
         >
-          <Triangle />
+          <Triangle className='w-5 h-5 sm:h-auto sm:w-auto'/>
         </button>
       </Tooltip>
       
       <Tooltip content="Line Thickness (2-32px)">
-        <div className="slider-container flex flex-col items-center gap-1 w-full px-2 py-4">
+        <div className="slider-container flex flex-col items-center gap-1 w-20 sm:w-full px-1 sm:px-2 py-4">
           <input
             type="range"
             min="1"
@@ -150,7 +150,7 @@ const Toolbar = () => {
       </Tooltip>
       <Tooltip content="Hold for 1s to Clear Canvas">
         <button
-          className='cursor-pointer p-2 rounded text-red-500 transition-colors relative
+          className='cursor-pointer p-1 sm:p-2 rounded text-red-500 transition-colors relative
           hover:bg-neutral-100 dark:hover:bg-neutral-700'
           onMouseDown={handleClearMouseDown}
           onMouseUp={handleClearMouseUp}

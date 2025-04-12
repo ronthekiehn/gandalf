@@ -71,7 +71,7 @@ const StrokeGen = () => {
     <div className="relative">
       <Tooltip content="AI Drawing (experimental)" direction="top">
         <button
-          className={`cursor-pointer px-[11px] py-1.5 rounded transition-all flex items-center justify-center text-lg
+          className={`cursor-pointer px-[6px] py-[2px] sm:px-[11px] sm:py-1.5 rounded transition-all flex items-center justify-center sm:text-lg
           ring-offset-white dark:ring-offset-neutral-800  ${showPrompt ? 'bg-neutral-200 dark:bg-neutral-700' : 'hover:bg-neutral-100 dark:hover:bg-neutral-700'}`}
           onClick={() => setShowPrompt(!showPrompt)}
           aria-label="AI"

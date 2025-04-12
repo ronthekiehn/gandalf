@@ -740,14 +740,54 @@ const useWhiteboardStore = create((set, get) => ({
   getStrokesForExport: () => {
     if (!yStrokes) return [];
     
-    return yStrokes.toArray().map(stroke => {
-      const strokeData = Array.isArray(stroke) ? stroke[0] : stroke;
-      return {
-        points: strokeData.points,
-        color: strokeData.color,
-        width: strokeData.width
-      };
+    const state = get();
+    const canvasWidth = state.bgCanvas?.width || 2500;
+    const canvasHeight = state.bgCanvas?.height || 1600;
+    
+    return {
+      strokes: yStrokes.toArray().map(stroke => {
+        const strokeData = Array.isArray(stroke) ? stroke[0] : stroke;
+        return {
+          points: strokeData.points,
+          color: strokeData.color,
+          width: strokeData.width
+        };
+      }),
+      canvasWidth,
+      canvasHeight
+    };
+  },
+
+  importGeneratedStrokes: (strokes) => {
+    if (!yStrokes) return;
+
+    if (!strokes.length) return;
+
+    const clientID = ydoc.clientID;
+    const processedStrokes = strokes.map(stroke => ({
+      ...stroke,
+      id: Date.now().toString() + Math.random(),
+      clientID,
+      toolType: 'pen'
+    }));
+
+    // Add to Y.js array
+    ydoc.transact(() => {
+      processedStrokes.forEach(stroke => {
+        yStrokes.push([stroke]);
+      });
     });
+
+    // Draw strokes on background
+    processedStrokes.forEach(stroke => {
+      get().drawStrokeOnBg(stroke);
+    });
+
+    // Update local state
+    set(state => ({
+      lines: [...state.lines, ...processedStrokes],
+      undoStack: [...state.undoStack, ...processedStrokes]
+    }));
   }
 }));
 

@@ -24,11 +24,17 @@ const Gemini = () => {
     setIsGenerating(true);
 
     try {
-      const allStrokes = getStrokesForExport();
+      const canvasData = getStrokesForExport();
+      const requestData = {
+        strokes: canvasData.strokes,
+        canvasWidth: canvasData.canvasWidth,
+        canvasHeight: canvasData.canvasHeight
+      };
+      
       const response = await fetch(`${API}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strokes: allStrokes })
+        body: JSON.stringify(requestData)
       });
 
       if (!response.ok) {
@@ -71,7 +77,7 @@ const Gemini = () => {
 
   return (
     <div className="relative">
-    <Tooltip content="Uses Gemini Flash 2.0 to 'complete' your drawing. May hit rate limits!" direction="left" cn='w-full'>
+    <Tooltip content="Creates a new image 'improving' your drawing. Does not effect the whiteboard. (legacy)" direction="left" cn='w-full'>
       <button
         className="text-black p-2 w-full rounded-full bg-neutral-100 dark:bg-neutral-800 dark:shadow-white/10 dark:text-white hover:-translate-y-0.5 transition-all !duration-200 ease-in-out hover:shadow-lg cursor-pointer active:shadow-none active:translate-y-0 !active:duration-100"
         onClick={generateImage}

@@ -13,7 +13,7 @@ const defaultValues = {
 };
 
 const TopMenu = () => {
-  const { bgCanvas, userName, setUserName, smoothingParams, setSmoothingParams, pinchDist, setPinchDist, fistToClear, setFistToClear, shapeRecognition, setShapeRecognition } = useWhiteboardStore();
+  const { bgCanvas, userName, setUserName, smoothingParams, setSmoothingParams, pinchDist, setPinchDist, fistToClear, setFistToClear } = useWhiteboardStore();
   const [localUserName, setLocalUserName] = useState(userName);
 
   //everything to do with smoothing
@@ -220,18 +220,6 @@ const TopMenu = () => {
       <div>
       <h3 className="text-center w-full text-neutral-400 text-sm mb-2 ">Experimental Features</h3>
       <div className='flex flex-col gap-2'> 
-      <Tooltip direction='left' content='When enabled, circles, triangles, and rectangles will be created based off your lines. Default: Off'>
-        <label className="flex justify-between items-center">
-          Shape Recognition
-          <button
-            className={`w-4 h-4 mx-[1ch] cursor-pointer rounded-full border-black border-2 flex items-center justify-center dark:border-white ${shapeRecognition ? 'bg-black dark:bg-white' : 'bg-white dark:bg-black'}`}
-            onClick={() => setShapeRecognition(!shapeRecognition)}
-            aria-checked={shapeRecognition}
-            role="switch"
-          >
-          </button>
-        </label>
-        </Tooltip>
       <Gemini />
       </div>
       </div>

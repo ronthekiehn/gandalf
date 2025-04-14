@@ -5,14 +5,13 @@ Visit [gandalf.design](https://gandalf.design) to try it out.
 ## Features
 - Hand tracking
 - Live multiplayer
+- AI drawing
+- Shape Recognition
 - Looks sexy
 
-## Experimental / Vibe Coded Features
-- Gemini Flash "improve image"
-- Shape Recognition
-
 ## Future Potential Features
-- [ ] Textboxes
+- [ ] Infinite Canvas
+- [ ] Textboxes (w/ AI chat)
 - [ ] Images
 - [ ] Live chat
 - [ ] Private rooms

@@ -46,11 +46,16 @@ export const Tooltip = ({ children, direction = "top", content, cn='' }) => {
         setVisible(false);
     };
 
+    const handleClick = () => {
+        setVisible(false);
+    };
+
     return (
         <div
             className={`z-50 relative inline-block ${cn}`}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
+            onClick={handleClick}
         >
             {children}
             {visible && (

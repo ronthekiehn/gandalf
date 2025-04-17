@@ -131,6 +131,45 @@ setInterval(() => WSrateLimiter.cleanup(), 10000);
 setInterval(() => httpRateLimiter.cleanup(), 10000);
 setInterval(() => generateStrokesLimiter.cleanup(), 60000);
 
+const INACTIVE_TIMEOUT = 10 * 60 * 1000; // 10 minutes inactivity timeout
+const HEARTBEAT_INTERVAL = 30 * 1000;   // Send heartbeat every 30 seconds
+
+// Clean up inactive users every minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [clientId, client] of clients.entries()) {
+    if (now - client.lastActive > INACTIVE_TIMEOUT) {
+      console.log(`Cleaning up inactive user ${client.userName} in room ${client.roomCode}`);
+      client.ws.close(1000, 'Inactive timeout');
+      clients.delete(clientId);
+
+      // Notify remaining users in the room about the user leaving
+      const remainingUsers = Array.from(clients.values())
+        .filter(c => c.roomCode === client.roomCode)
+        .map(c => ({
+          clientID: c.id,
+          userName: c.userName,
+          color: c.color,
+          roomCode: c.roomCode
+        }));
+
+      if (remainingUsers.length === 0) {
+        scheduleRoomCleanup(client.roomCode);
+      }
+
+      wss.clients.forEach((wsClient) => {
+        const clientData = Array.from(clients.values()).find(c => c.ws === wsClient);
+        if (wsClient.readyState === WebSocket.OPEN && clientData?.roomCode === client.roomCode) {
+          wsClient.send(JSON.stringify({
+            type: 'active-users',
+            users: remainingUsers
+          }));
+        }
+      });
+    }
+  }
+}, 60000);
+
 const server = http.createServer((req, res) => {
   const ip = req.socket.remoteAddress;
   if (httpRateLimiter.isRateLimited(ip)) {
@@ -443,7 +482,7 @@ wss.on('connection', (ws, req) => {
       id: clientID,
       connectedAt: new Date(),
       ip: req.socket.remoteAddress,
-      lastActive: new Date(),
+      lastActive: Date.now(),
       userName,
       roomCode,
       ws,
@@ -451,6 +490,27 @@ wss.on('connection', (ws, req) => {
     };
 
     clients.set(clientID, clientInfo);
+
+    // Setup heartbeat to keep track of active users
+    const heartbeat = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, HEARTBEAT_INTERVAL);
+
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.type === 'pong') {
+          const client = clients.get(clientID);
+          if (client) {
+            client.lastActive = Date.now();
+          }
+        }
+      } catch (e) {
+        // Ignore parsing errors for non-heartbeat messages
+      }
+    });
 
     // Get all users in this room (including the new user since we stored it above)
     const activeUsers = Array.from(clients.values())
@@ -475,6 +535,7 @@ wss.on('connection', (ws, req) => {
 
 
     ws.on('close', () => {
+      clearInterval(heartbeat);
       clients.delete(clientID);
       // Send updated active users list after user leaves
       const remainingUsers = Array.from(clients.values())
@@ -499,6 +560,11 @@ wss.on('connection', (ws, req) => {
           }));
         }
       });
+    });
+
+    ws.on('error', () => {
+      clearInterval(heartbeat);
+      ws.close();
     });
   }
   ws.on('error', () => {

@@ -120,6 +120,19 @@ const useWhiteboardStore = create((set, get) => ({
     yStrokes = ydoc.getArray('strokes');
     yActiveStrokes = ydoc.getMap('activeStrokes'); // Add this
     awareness = provider.awareness;
+
+    // Handle ping messages from server
+    provider.ws.addEventListener('message', (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'ping') {
+          // Respond with pong to keep connection alive
+          provider.ws.send(JSON.stringify({ type: 'pong' }));
+        }
+      } catch (e) {
+        // Ignore non-JSON messages (y-websocket protocol messages)
+      }
+    });
     
     // Set client ID
     set({ clientID: ydoc.clientID });

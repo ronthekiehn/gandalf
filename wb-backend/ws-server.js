@@ -715,9 +715,6 @@ const textModel = genAI.getGenerativeModel({
   });
 
 const generationConfig = {
-  temperature: 0.01,
-  topP: 0.95,
-  topK: 40,
   maxOutputTokens: 8192,
   responseModalities: [
     "image",
@@ -727,9 +724,6 @@ const generationConfig = {
 };
 
 const textGenerationConfig = {
-  temperature: 1,
-  topP: 0.95,
-  topK: 40,
   maxOutputTokens: 8192,
   responseModalities: [
   ],
